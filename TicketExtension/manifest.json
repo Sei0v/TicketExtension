@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Freshdesk Ticket Buttons",
+  "version": "1.4",
+  "description": "Adds Create Ticket, Senior Ticket, RMS, and Delay Calculator buttons to Freshdesk ticket pages.",
+  "permissions": [
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.breadfast.com/*",
+    "*://breadfast.com/*",
+    "*://*.freshdesk.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.freshdesk.com/*",
+        "*://*.breadfast.com/*",
+        "*://breadfast.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}
