@@ -41,14 +41,96 @@
     const container = document.createElement('div');
     container.id = 'bf-custom-ticket-buttons';
     
-    // Position fixed at the bottom right corner of the page
+    // Position fixed at the bottom corner of the page
     container.style.position = 'fixed';
     container.style.bottom = '20px';
-    container.style.right = '20px';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.gap = '6px';
     container.style.zIndex = '999999';
+    container.style.transition = 'left 0.25s ease, right 0.25s ease';
+
+    // Header row with side toggle button (Left/Right)
+    const headerRow = document.createElement('div');
+    headerRow.style.display = 'flex';
+    headerRow.style.width = '100%';
+    headerRow.style.marginBottom = '2px';
+
+    const toggleBtn = document.createElement('button');
+    toggleBtn.id = 'bf-toggle-pos-btn';
+    toggleBtn.setAttribute('type', 'button');
+    toggleBtn.style.padding = '3px 8px';
+    toggleBtn.style.border = 'none';
+    toggleBtn.style.borderRadius = '4px';
+    toggleBtn.style.backgroundColor = '#4b5563';
+    toggleBtn.style.color = '#ffffff';
+    toggleBtn.style.fontSize = '11px';
+    toggleBtn.style.fontWeight = 'bold';
+    toggleBtn.style.cursor = 'pointer';
+    toggleBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+    toggleBtn.style.transition = 'background-color 0.2s, transform 0.1s';
+    toggleBtn.style.lineHeight = '1.2';
+    toggleBtn.style.whiteSpace = 'nowrap';
+
+    toggleBtn.addEventListener('mouseenter', () => {
+      toggleBtn.style.backgroundColor = '#374151';
+    });
+    toggleBtn.addEventListener('mouseleave', () => {
+      toggleBtn.style.backgroundColor = '#4b5563';
+    });
+    toggleBtn.addEventListener('mousedown', () => {
+      toggleBtn.style.transform = 'scale(0.93)';
+    });
+    toggleBtn.addEventListener('mouseup', () => {
+      toggleBtn.style.transform = 'scale(1)';
+    });
+
+    const getLeftOffset = () => {
+      const sidebar = document.querySelector('nav, .app-nav-bar, .page-actions, aside, [role="navigation"]');
+      if (sidebar) {
+        const rect = sidebar.getBoundingClientRect();
+        if (rect.left <= 10 && rect.width > 30 && rect.width < 150) {
+          return `${Math.round(rect.right + 15)}px`;
+        }
+      }
+      return '20px';
+    };
+
+    let currentSide = 'right';
+    try {
+      currentSide = localStorage.getItem('bf_buttons_position') || 'right';
+    } catch (e) {}
+
+    const applyPosition = (side) => {
+      currentSide = side;
+      try {
+        localStorage.setItem('bf_buttons_position', side);
+      } catch (e) {}
+
+      if (side === 'left') {
+        container.style.left = getLeftOffset();
+        container.style.right = 'auto';
+        toggleBtn.innerHTML = '⇄ &#9654;'; // ⇄ ▶
+        toggleBtn.title = 'نقل إلى اليمين (Move to right)';
+        headerRow.style.justifyContent = 'flex-start';
+      } else {
+        container.style.right = '20px';
+        container.style.left = 'auto';
+        toggleBtn.innerHTML = '&#9664; ⇄'; // ◀ ⇄
+        toggleBtn.title = 'نقل إلى اليسار (Move to left)';
+        headerRow.style.justifyContent = 'flex-end';
+      }
+    };
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nextSide = currentSide === 'right' ? 'left' : 'right';
+      applyPosition(nextSide);
+    });
+
+    applyPosition(currentSide);
+    headerRow.appendChild(toggleBtn);
 
     const createBtn = (id, text, color) => {
       const btn = document.createElement('button');
@@ -332,6 +414,7 @@
       window.open(rmsUrl, '_blank', 'noopener,noreferrer');
     });
 
+    container.appendChild(headerRow);
     container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
     container.appendChild(rmsBtn);
