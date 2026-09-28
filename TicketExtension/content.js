@@ -4828,15 +4828,19 @@ Have a good day.`
           return true;
         }
       }
-      const openContent = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed):not([style*="display: none"])');
-      return !!openContent;
+      return false;
     };
 
     const clickElement = (el) => {
       if (!el) return;
       ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
-        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        try {
+          el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+        } catch (e) { }
       });
+      try {
+        if (typeof el.click === 'function') el.click();
+      } catch (e) { }
     };
 
     const findFieldTriggerByLabel = (labelRegex) => {
@@ -4946,58 +4950,70 @@ Have a good day.`
       const isInternal = typeLow.includes('internal');
 
       if (isInternal) {
-        // 1. Match label "Internal Request Type"
-        const tr = findFieldTriggerByLabel(/^internal\s*request\s*type$/i) ||
-                   findFieldTriggerByLabel(/internal\s*request\s*type/i);
-        if (tr) return tr;
-
-        // 2. Selectors
-        const sel = document.querySelector(
+        // 1. Internal Requests L1 (Internal Request Type)
+        const tr = document.querySelector(
           '[data-test-id*="internal_request_type" i] .ember-power-select-trigger, ' +
           '[data-test-id*="cf_internal_request_type" i] .ember-power-select-trigger, ' +
           '[data-test-id*="cf_internal_type" i] .ember-power-select-trigger, ' +
           '[data-test-id="level-1"] .ember-power-select-trigger'
         );
-        if (sel) return sel;
+        if (tr) return tr;
 
-        // 3. Fallback: Dropdown immediately following Type
+        const byLabel = findFieldTriggerByLabel(/^internal\s*request\s*type$/i) ||
+                        findFieldTriggerByLabel(/internal\s*request\s*type/i);
+        if (byLabel) return byLabel;
+
         const typeTr = getLiveTypeTrigger();
         if (typeTr) {
           const nextTr = getDropdownFollowing(typeTr);
           if (nextTr) return nextTr;
         }
       } else if (isFb) {
-        const tr = findFieldTriggerByLabel(/feedback\s*category/i);
+        // 2. Feedback L1 (Feedback Category)
+        const tr = document.querySelector(
+          '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="feedback_category" i] .ember-power-select-trigger, ' +
+          '[data-test-id="level-1"] .ember-power-select-trigger, ' +
+          '[title*="Feedback Category" i] ~ .ember-power-select-trigger, ' +
+          '[title*="Feedback Category" i] .ember-power-select-trigger'
+        );
         if (tr) return tr;
-        const fbCont = document.querySelector('[data-test-id*="cf_feedback_category" i]');
-        if (fbCont) {
-          const trCont = fbCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, .ember-power-select-trigger');
-          if (trCont) return trCont;
-        }
-        const typeTr = getLiveTypeTrigger();
-        if (typeTr) {
-          const nextTr = getDropdownFollowing(typeTr);
-          if (nextTr) return nextTr;
-        }
+
+        const byLabel = findFieldTriggerByLabel(/^feedback\s*category$/i) ||
+                        findFieldTriggerByLabel(/feedback\s*category/i);
+        if (byLabel) return byLabel;
       } else {
-        // Complaints
-        const tr = findFieldTriggerByLabel(/complaint\s*category/i);
+        // 3. Complaints L1 (Complaint Category Food Agg)
+        // Direct scoped selectors for Food Agg Category
+        const tr = document.querySelector(
+          '[data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger, ' +
+          '[title*="Complaint Category Food Agg" i] ~ .ember-power-select-trigger, ' +
+          '[title*="Complaint Category Food Agg" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="complaint_category_food_agg" i] .ember-power-select-trigger'
+        );
         if (tr) return tr;
-        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
-        if (foodAggCont) {
-          const trCont = foodAggCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, [data-test-id*="Complaint Category" i] .ember-power-select-trigger, .ember-power-select-trigger');
-          if (trCont) return trCont;
+
+        // Selectors strictly avoiding buddy
+        const candTrs = Array.from(document.querySelectorAll(
+          '[data-test-id*="complaint_category" i], [data-test-id*="cf_complaint_category" i], [title*="Complaint Category" i]'
+        ));
+        for (const el of candTrs) {
+          const attr = ((el.getAttribute('data-test-id') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+          if (!attr.includes('buddy')) {
+            const trigger = el.classList.contains('ember-power-select-trigger') ? el : el.querySelector('.ember-power-select-trigger');
+            if (trigger) return trigger;
+          }
         }
-        const typeTr = getLiveTypeTrigger();
-        if (typeTr) {
-          const nextTr = getDropdownFollowing(typeTr);
-          if (nextTr) return nextTr;
-        }
+
+        // Label matching (strict: must NOT match Buddy)
+        const byLabel = findFieldTriggerByLabel(/complaint\s*category.*food\s*agg/i) ||
+                        findFieldTriggerByLabel(/^complaint\s*category$/i);
+        if (byLabel) return byLabel;
       }
 
       return document.querySelector(
-        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
         '[data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
         '[data-test-id*="cf_complaint_category" i] .ember-power-select-trigger, ' +
         '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger'
       );
@@ -5009,68 +5025,78 @@ Have a good day.`
       const isInternal = typeLow.includes('internal');
 
       if (isInternal) {
-        // 1. Match label "Internal Request" (must NOT be "Internal Request Type")
-        const tr = findFieldTriggerByLabel(/^internal\s*request$/i) ||
-                   findFieldTriggerByLabel(/^internal\s*request(?:\s*(?:detail|sub|issue|reason))?$/i);
+        // 1. Internal Requests L2 (Internal Request Details)
+        const tr = document.querySelector(
+          '[data-test-id*="internal_request_detail" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_internal_request_detail" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger, ' +
+          '[data-test-id*="internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger, ' +
+          '.nested-level-2-group .ember-power-select-trigger, ' +
+          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '[data-test-id="level-2"] .ember-power-select-trigger'
+        );
         if (tr) return tr;
 
-        // 2. Selectors
-        const sel = document.querySelector(
-          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
-          '.nested-level-2-group .ember-power-select-trigger, ' +
-          '.nested-sub-fields .ember-power-select-trigger, ' +
-          '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-          '[data-test-id*="cf_internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger, ' +
-          '[data-test-id*="internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger'
-        );
-        if (sel) return sel;
+        const byLabel = findFieldTriggerByLabel(/^internal\s*request$/i) ||
+                        findFieldTriggerByLabel(/^internal\s*request(?:\s*(?:detail|sub|issue|reason))?$/i);
+        if (byLabel) return byLabel;
 
-        // 3. Fallback: Dropdown immediately following Level 1
         const l1Tr = getLiveLevel1Trigger(treeType);
         if (l1Tr) {
           const nextTr = getDropdownFollowing(l1Tr);
           if (nextTr) return nextTr;
         }
       } else if (isFb) {
-        const tr = findFieldTriggerByLabel(/feedback\s*detail/i);
+        // 2. Feedback L2 (Feedback Details)
+        const tr = document.querySelector(
+          '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="feedback_details" i] .ember-power-select-trigger, ' +
+          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '[title*="Feedback Details" i] ~ .ember-power-select-trigger, ' +
+          '[title*="Feedback Details" i] .ember-power-select-trigger'
+        );
         if (tr) return tr;
-        const fbCont = document.querySelector('[data-test-id*="cf_feedback" i]');
-        if (fbCont) {
-          const trCont = fbCont.querySelector(
-            '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
-            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-            '.nested-sub-fields .ember-power-select-trigger'
-          );
-          if (trCont) return trCont;
-        }
-        const l1Tr = getLiveLevel1Trigger(treeType);
-        if (l1Tr) {
-          const nextTr = getDropdownFollowing(l1Tr);
-          if (nextTr) return nextTr;
-        }
+
+        const byLabel = findFieldTriggerByLabel(/feedback\s*detail/i);
+        if (byLabel) return byLabel;
       } else {
-        // Complaints
-        const tr = findFieldTriggerByLabel(/complaint\s*detail/i);
+        // 3. Complaints L2 (Complaint Details Food Agg)
+        // Direct scoped selectors for Food Agg Details
+        const tr = document.querySelector(
+          '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_complaint_details_food_agg" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="complaint_details_food_agg" i] .ember-power-select-trigger, ' +
+          '[title*="Complaint Details Food Agg" i] ~ .ember-power-select-trigger, ' +
+          '[title*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '.nested-sub-fields .ember-power-select-trigger, ' +
+          '[data-test-id="level-2"] .ember-power-select-trigger'
+        );
         if (tr) return tr;
-        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
-        if (foodAggCont) {
-          const trCont = foodAggCont.querySelector(
-            '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-            '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
-            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-            '.nested-sub-fields .ember-power-select-trigger'
-          );
-          if (trCont) return trCont;
+
+        // Selectors strictly avoiding buddy
+        const candTrs = Array.from(document.querySelectorAll(
+          '[data-test-id*="complaint_details" i], [data-test-id*="cf_complaint_details" i], [title*="Complaint Details" i]'
+        ));
+        for (const el of candTrs) {
+          const attr = ((el.getAttribute('data-test-id') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
+          if (!attr.includes('buddy')) {
+            const trigger = el.classList.contains('ember-power-select-trigger') ? el : el.querySelector('.ember-power-select-trigger');
+            if (trigger) return trigger;
+          }
         }
-        const l1Tr = getLiveLevel1Trigger(treeType);
-        if (l1Tr) {
-          const nextTr = getDropdownFollowing(l1Tr);
-          if (nextTr) return nextTr;
-        }
+
+        // Label matching (strict: must NOT match Buddy)
+        const byLabel = findFieldTriggerByLabel(/complaint\s*detail.*food\s*agg/i) ||
+                        findFieldTriggerByLabel(/^complaint\s*details?$/i);
+        if (byLabel) return byLabel;
       }
 
       return document.querySelector(
         '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_details_food_agg" i] .ember-power-select-trigger, ' +
         '[data-test-id="level-2"] .ember-power-select-trigger, ' +
         '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
         '[data-test-id*="cf_complaint_details" i] .ember-power-select-trigger, ' +
@@ -5089,7 +5115,7 @@ Have a good day.`
       );
     };
 
-    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 3000) => {
+    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 4500) => {
       if (!getTriggerFn || !targetValue) return false;
       const norm = (s) => (s || '').trim().toLowerCase()
         .replace(/resturant/g, 'restaurant')
@@ -5108,9 +5134,7 @@ Have a good day.`
         }
         const curClean = curText.replace(/[^a-z0-9]/g, '');
         if (!curClean) return false;
-        return curClean === targetClean ||
-               (curClean.length >= targetClean.length && curClean.includes(targetClean)) ||
-               (curText.startsWith(target) || (target.length >= 4 && target.startsWith(curText)));
+        return curClean === targetClean || curText === target;
       };
 
       // Fast-path: Check immediately if trigger exists and already selected
@@ -5126,7 +5150,7 @@ Have a good day.`
         if (trigger && document.body.contains(trigger) && !isTriggerDisabled(trigger)) {
           break;
         }
-        await new Promise(r => setTimeout(r, 20));
+        await new Promise(r => setTimeout(r, 25));
       }
 
       if (!trigger || !document.body.contains(trigger)) {
@@ -5155,17 +5179,17 @@ Have a good day.`
         }
 
         if (isTriggerDisabled(trigger)) {
-          await new Promise(r => setTimeout(r, 25));
+          await new Promise(r => setTimeout(r, 30));
           continue;
         }
 
         const open = isDropdownOpen(trigger);
 
         // If dropdown closed or hasn't opened yet, open it
-        if (!open && Date.now() - lastClickTime > 120) {
+        if (!open && Date.now() - lastClickTime > 180) {
           lastClickTime = Date.now();
           clickElement(trigger);
-          await new Promise(r => setTimeout(r, 25));
+          await new Promise(r => setTimeout(r, 40));
           continue;
         }
 
@@ -5173,7 +5197,7 @@ Have a good day.`
 
         const hasLoadingMsg = allOptions.some(o => o.classList.contains('ember-power-select-option--loading-message'));
         if (hasLoadingMsg) {
-          await new Promise(r => setTimeout(r, 30));
+          await new Promise(r => setTimeout(r, 40));
           continue;
         }
 
@@ -5183,7 +5207,7 @@ Have a good day.`
         });
 
         if (validOptions.length === 0) {
-          await new Promise(r => setTimeout(r, 20));
+          await new Promise(r => setTimeout(r, 30));
           continue;
         }
 
@@ -5211,17 +5235,20 @@ Have a good day.`
           clickElement(match);
           matched = true;
 
-          // Quick wait for Ember to process selection
-          await new Promise(r => setTimeout(r, 40));
-          const postTr = getTriggerFn() || trigger;
-          if (isAlreadySelected(postTr)) {
-            return true;
+          // Poll for Ember to reflect selection
+          const confirmStart = Date.now();
+          while (Date.now() - confirmStart < 600) {
+            await new Promise(r => setTimeout(r, 40));
+            const postTr = getTriggerFn() || trigger;
+            if (isAlreadySelected(postTr)) {
+              return true;
+            }
           }
-          break;
+          return true;
         }
 
         // Fallback: search input if options list is filtered
-        if (Date.now() - startFind > 280 && !searched && open) {
+        if (Date.now() - startFind > 350 && !searched && open) {
           searched = true;
           const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
           const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
@@ -5234,10 +5261,10 @@ Have a good day.`
           }
         }
 
-        await new Promise(r => setTimeout(r, 20));
+        await new Promise(r => setTimeout(r, 30));
       }
 
-      await new Promise(r => setTimeout(r, 35));
+      await new Promise(r => setTimeout(r, 40));
       const finalTr = getTriggerFn() || trigger;
       return isAlreadySelected(finalTr) || matched;
     };
@@ -5255,8 +5282,8 @@ Have a good day.`
         const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
         if (!buText.includes('food aggregation')) {
           showToast('Setting Business unit: Food Aggregation...', 'info');
-          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 2500);
-          await new Promise(r => setTimeout(r, 50));
+          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 4000);
+          await new Promise(r => setTimeout(r, 200));
         }
       }
 
@@ -5271,17 +5298,18 @@ Have a good day.`
         const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
         const curTypeText = norm(curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent);
         const targetTypeClean = norm(treeType);
-        const typeNeedsChange = curTypeText !== targetTypeClean && !curTypeText.includes(targetTypeClean) && !targetTypeClean.includes(curTypeText);
+        const typeNeedsChange = !curTypeText || (curTypeText !== targetTypeClean && !curTypeText.includes(targetTypeClean) && !targetTypeClean.includes(curTypeText));
 
         if (typeNeedsChange) {
           console.log(`[Auto Fill] Setting Type to "${treeType}"...`);
-          await setDropdownValue(getLiveTypeTrigger, treeType, 2500);
-          // Fast-poll until L1 trigger is ready and not disabled
+          await setDropdownValue(getLiveTypeTrigger, treeType, 4000);
+          // Wait for Ember to re-render properties after Type change
+          await new Promise(r => setTimeout(r, 350));
           const startWaitAfterType = Date.now();
-          while (Date.now() - startWaitAfterType < 1800) {
+          while (Date.now() - startWaitAfterType < 3000) {
             const l1Tr = getL1();
             if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
-            await new Promise(r => setTimeout(r, 20));
+            await new Promise(r => setTimeout(r, 50));
           }
         }
       }
@@ -5300,17 +5328,18 @@ Have a good day.`
 
         if (l1NeedsChange) {
           console.log(`[Auto Fill] Setting Level 1 to "${category}"...`);
-          await setDropdownValue(getL1, category, 2500);
-          // Fast-poll for Level 2 trigger to be enabled and mounted ONLY if detail is provided
+          await setDropdownValue(getL1, category, 4000);
+          // IMPORTANT: Give Ember time to dispatch AJAX and invalidate old Level 2
+          await new Promise(r => setTimeout(r, 300));
           if (detail) {
             const startWaitL2 = Date.now();
-            while (Date.now() - startWaitL2 < 1800) {
+            while (Date.now() - startWaitL2 < 4000) {
               const l2Tr = getL2();
               if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
-                await new Promise(r => setTimeout(r, 30));
+                await new Promise(r => setTimeout(r, 150));
                 break;
               }
-              await new Promise(r => setTimeout(r, 20));
+              await new Promise(r => setTimeout(r, 50));
             }
           }
         }
@@ -5320,11 +5349,11 @@ Have a good day.`
       if (detail) {
         console.log(`[Auto Fill] Setting Level 2 to "${detail}"...`);
         let l2Ok = false;
-        for (let attempt = 0; attempt < 2 && !l2Ok; attempt++) {
+        for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
           if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 200));
           }
-          l2Ok = await setDropdownValue(getL2, detail, 2500);
+          l2Ok = await setDropdownValue(getL2, detail, 4000);
         }
         if (!l2Ok) {
           console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
@@ -5335,9 +5364,9 @@ Have a good day.`
       if (subDetail) {
         console.log(`[Auto Fill] Setting Level 3 to "${subDetail}"...`);
         let l3Ok = false;
-        for (let attempt = 0; attempt < 2 && !l3Ok; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 50));
-          l3Ok = await setDropdownValue(getL3, subDetail, 2000);
+        for (let attempt = 0; attempt < 3 && !l3Ok; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 150));
+          l3Ok = await setDropdownValue(getL3, subDetail, 3500);
         }
       }
 
