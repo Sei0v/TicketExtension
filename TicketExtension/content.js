@@ -150,26 +150,46 @@
       if (labelTr) return labelTr;
     }
 
-    // 2. Feedback Category (Level 1)
-    if (norm === 'feedback category' || (norm.includes('feedback') && (norm.includes('category') || norm.includes('cat')))) {
+    // 2a. Feedback Type (Level 1: Negative / Positive / Neutral)
+    if (norm === 'feedback type' || norm === 'feedback_type' || (norm.includes('feedback') && norm.includes('type'))) {
       const selectors = [
-        '[data-test-id*="feedback_category" i]',
-        '[data-test-id*="feedback category" i]',
-        '[data-test-id*="cf_feedback_category" i]',
-        '[data-test-id="level-1" i]',
-        '[data-test-id*="level-1" i]',
-        '[data-test-id*="level_1" i]',
-        '[title*="Feedback Category" i]'
+        '[data-test-id*="cf_feedback_type" i]',
+        '[data-test-id*="feedback_type" i]',
+        '[data-test-id*="feedback-type" i]',
+        '[title="Feedback Type" i]',
+        '[title*="Feedback Type" i]',
+        '[data-test-select-field*="feedback_type" i]'
       ];
       for (const sel of selectors) {
         const tr = getTriggerFrom(document.querySelector(sel));
         if (tr && document.body.contains(tr)) return tr;
       }
-      const labelTr = getTriggerByLabel(/feedback\s*category/i);
+      const labelTr = getTriggerByLabel(/^feedback\s*type$/i) || getTriggerByLabel(/feedback\s*type/i);
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
-    // 2b. Internal Request Type (Level 1 - Rider Support / Resturant Support)
+    // 2b. Feedback / Feedback Category (Level 2: Products Quality, CX agent, etc.)
+    if (norm === 'feedback' || norm === 'feedback category' || norm === 'feedback_category' || (norm.includes('feedback') && (norm.includes('category') || norm.includes('cat')))) {
+      const selectors = [
+        '[data-test-id*="cf_feedback_category" i]',
+        '[data-test-id*="feedback_category" i]',
+        '[data-test-id*="cf_feedback" i]:not([data-test-id*="type" i]):not([data-test-id*="detail" i])',
+        '[data-test-id*="feedback" i]:not([data-test-id*="type" i]):not([data-test-id*="detail" i])',
+        '[title="Feedback" i]',
+        '[title*="Feedback Category" i]',
+        '[data-test-id="level-1" i]',
+        '[data-test-id*="level-1" i]',
+        '[data-test-id*="level_1" i]'
+      ];
+      for (const sel of selectors) {
+        const tr = getTriggerFrom(document.querySelector(sel));
+        if (tr && document.body.contains(tr)) return tr;
+      }
+      const labelTr = getTriggerByLabel(/^feedback$/i) || getTriggerByLabel(/^feedback\s*category$/i) || getTriggerByLabel(/feedback\s*category/i);
+      if (labelTr && document.body.contains(labelTr)) return labelTr;
+    }
+
+    // 2c. Internal Request Type (Level 1 - Rider Support / Resturant Support)
     if (norm === 'internal request type' || (norm.includes('internal') && (norm.includes('request type') || norm.includes('category') || norm.includes('support')))) {
       const selectors = [
         '[title="Internal Request Type" i]',
@@ -189,17 +209,19 @@
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
-    // 3. Feedback Details (Level 2)
-    if (norm === 'feedback details' || norm === 'feedback detail' || (norm.includes('feedback') && (norm.includes('detail') || norm.includes('sub')))) {
+    // 3a. Feedback Details (Level 3: Quality, Damaged, Taste, Foreign object, Expiry date preference, Size)
+    if (norm === 'feedback details' || norm === 'feedback detail' || norm === 'feedback_details' || (norm.includes('feedback') && (norm.includes('detail') || norm.includes('sub')))) {
       const selectors = [
-        '[data-test-id*="feedback_details" i]',
-        '[data-test-id*="feedback details" i]',
+        '[data-test-id*="Feedback Details" i]',
         '[data-test-id*="cf_feedback_details" i]',
+        '[data-test-id*="feedback_details" i]',
+        '[data-test-id*="feedback-detail" i]',
+        '[title="Feedback Details" i]',
+        '[title*="Feedback Details" i]',
+        '.nested-sub-fields [data-test-id*="level-2" i]',
         '[data-test-id="level-2" i]',
         '[data-test-id*="level-2" i]',
-        '[data-test-id*="level_2" i]',
-        '.nested-sub-fields [data-test-id*="level-2" i]',
-        '[title*="Feedback Details" i]'
+        '[data-test-id*="level_2" i]'
       ];
       for (const sel of selectors) {
         const tr = getTriggerFrom(document.querySelector(sel));
@@ -212,7 +234,7 @@
           return triggers[1];
         }
       }
-      const labelTr = getTriggerByLabel(/feedback\s*detail/i);
+      const labelTr = getTriggerByLabel(/^feedback\s*details?$/i) || getTriggerByLabel(/feedback\s*detail/i);
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
@@ -767,35 +789,58 @@
           }
         }
       } else if ((treeType || '').toLowerCase().includes('feedback')) {
-        if (category) {
-          await assertDropdown('Feedback Category', category, 6000);
-          await new Promise(r => setTimeout(r, 220));
+        let fbType = '';
+        let fbCategory = '';
+        let fbDetails = subDetail || '';
+
+        const catLow = (category || '').toLowerCase();
+        const detLow = (detail || '').toLowerCase();
+
+        if (['negative', 'positive', 'neutral'].includes(catLow)) {
+          fbType = category;
+          fbCategory = detail;
+        } else if (['negative', 'positive', 'neutral'].includes(detLow)) {
+          fbType = detail;
+          fbCategory = category;
+        } else {
+          fbType = category;
+          fbCategory = detail;
         }
-        if (detail) {
-          let detailOk = false;
-          for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
-            if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 250));
-            }
-            detailOk = await assertDropdown('Feedback Details', detail, 6000);
+
+        if (fbType) {
+          let fbTypeOk = false;
+          for (let attempt = 0; attempt < 2 && !fbTypeOk; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 200));
+            fbTypeOk = await assertDropdown('Feedback Type', fbType, 5000);
           }
-          if (subDetail) {
-            await new Promise(r => setTimeout(r, 180));
-            let qualityOk = false;
-            for (let qTry = 0; qTry < 3 && !qualityOk; qTry++) {
-              if (qTry > 0) await new Promise(r => setTimeout(r, 250));
-              qualityOk = await assertDropdown('Quality', subDetail, 6000);
-              if (!qualityOk) {
-                qualityOk = await assertDropdown('Feedback Sub-detail', subDetail, 3000);
-              }
-            }
-          }
-          if (isNewTicketPage) {
-            setTicketSubject(category, detail, subDetail);
-          }
-          showToast(`✓ [Feedback] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
-          return true;
+          await new Promise(r => setTimeout(r, 250));
         }
+
+        if (fbCategory) {
+          let catOk = false;
+          for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 250));
+            catOk = await assertDropdown('Feedback', fbCategory, 5000);
+            if (!catOk) {
+              catOk = await assertDropdown('Feedback Category', fbCategory, 3000);
+            }
+          }
+          await new Promise(r => setTimeout(r, 250));
+        }
+
+        if (fbDetails) {
+          let detOk = false;
+          for (let attempt = 0; attempt < 3 && !detOk; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 250));
+            detOk = await assertDropdown('Feedback Details', fbDetails, 5000);
+          }
+        }
+
+        if (isNewTicketPage) {
+          setTicketSubject(category, detail, subDetail);
+        }
+        showToast(`✓ [Feedback] ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''} applied!`, 'info');
+        return true;
       } else if ((treeType || '').toLowerCase().includes('internal')) {
         if (category) {
           let catOk = false;
@@ -4359,7 +4404,17 @@ Have a good day.`
               { label: 'App usability/functionality' },
               { label: 'App Product Description' },
               { label: 'CX agent' },
-              { label: 'Products Quality' },
+              {
+                label: 'Products Quality',
+                children: [
+                  { label: 'Quality' },
+                  { label: 'Damaged' },
+                  { label: 'Taste' },
+                  { label: 'Foreign object' },
+                  { label: 'Expiry date preference' },
+                  { label: 'Size' }
+                ]
+              },
               { label: 'Products Pricing' },
               { label: 'Delivery Fees' },
               { label: 'Promotions' },
@@ -4944,6 +4999,82 @@ Have a good day.`
       return tr;
     };
 
+    const getLiveFeedbackTypeTrigger = () => {
+      let tr = document.querySelector(
+        '[data-test-id*="cf_feedback_type" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback_type" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback-type" i] .ember-power-select-trigger, ' +
+        '[title*="Feedback Type" i] ~ .ember-power-select-trigger, ' +
+        '[title*="Feedback Type" i] .ember-power-select-trigger'
+      );
+      if (tr) return tr;
+
+      const byLabel = findFieldTriggerByLabel(/^feedback\s*type$/i) ||
+                      findFieldTriggerByLabel(/feedback\s*type/i);
+      if (byLabel) return byLabel;
+
+      const typeTr = getLiveTypeTrigger();
+      if (typeTr) {
+        const nextTr = getDropdownFollowing(typeTr);
+        if (nextTr) return nextTr;
+      }
+      return null;
+    };
+
+    const getLiveFeedbackCategoryTrigger = () => {
+      let tr = document.querySelector(
+        '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback_category" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback" i]:not([data-test-id*="type" i]):not([data-test-id*="detail" i]) .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback" i]:not([data-test-id*="type" i]):not([data-test-id*="detail" i]) .ember-power-select-trigger, ' +
+        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
+        '[title="Feedback" i] ~ .ember-power-select-trigger, ' +
+        '[title="Feedback" i] .ember-power-select-trigger, ' +
+        '[title*="Feedback Category" i] ~ .ember-power-select-trigger, ' +
+        '[title*="Feedback Category" i] .ember-power-select-trigger'
+      );
+      if (tr) return tr;
+
+      const byLabel = findFieldTriggerByLabel(/^feedback$/i) ||
+                      findFieldTriggerByLabel(/^feedback\s*category$/i) ||
+                      findFieldTriggerByLabel(/feedback\s*category/i);
+      if (byLabel) return byLabel;
+
+      const fbTypeTr = getLiveFeedbackTypeTrigger();
+      if (fbTypeTr) {
+        const nextTr = getDropdownFollowing(fbTypeTr);
+        if (nextTr) return nextTr;
+      }
+      return null;
+    };
+
+    const getLiveFeedbackDetailsTrigger = () => {
+      let tr = document.querySelector(
+        '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback_details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="feedback-detail" i] .ember-power-select-trigger, ' +
+        '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
+        '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+        '[title="Feedback Details" i] ~ .ember-power-select-trigger, ' +
+        '[title="Feedback Details" i] .ember-power-select-trigger, ' +
+        '[title*="Feedback Details" i] ~ .ember-power-select-trigger, ' +
+        '[title*="Feedback Details" i] .ember-power-select-trigger'
+      );
+      if (tr) return tr;
+
+      const byLabel = findFieldTriggerByLabel(/^feedback\s*details?$/i) ||
+                      findFieldTriggerByLabel(/feedback\s*detail/i);
+      if (byLabel) return byLabel;
+
+      const fbCatTr = getLiveFeedbackCategoryTrigger();
+      if (fbCatTr) {
+        const nextTr = getDropdownFollowing(fbCatTr);
+        if (nextTr) return nextTr;
+      }
+      return null;
+    };
+
     const getLiveLevel1Trigger = (treeType = '') => {
       const typeLow = (treeType || '').toLowerCase();
       const isFb = typeLow.includes('feedback');
@@ -4969,19 +5100,9 @@ Have a good day.`
           if (nextTr) return nextTr;
         }
       } else if (isFb) {
-        // 2. Feedback L1 (Feedback Category)
-        const tr = document.querySelector(
-          '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger, ' +
-          '[data-test-id*="feedback_category" i] .ember-power-select-trigger, ' +
-          '[data-test-id="level-1"] .ember-power-select-trigger, ' +
-          '[title*="Feedback Category" i] ~ .ember-power-select-trigger, ' +
-          '[title*="Feedback Category" i] .ember-power-select-trigger'
-        );
+        // 2. Feedback L1 (Feedback Type)
+        const tr = getLiveFeedbackTypeTrigger();
         if (tr) return tr;
-
-        const byLabel = findFieldTriggerByLabel(/^feedback\s*category$/i) ||
-                        findFieldTriggerByLabel(/feedback\s*category/i);
-        if (byLabel) return byLabel;
       } else {
         // 3. Complaints L1 (Complaint Category Food Agg)
         // Direct scoped selectors for Food Agg Category
@@ -5047,20 +5168,9 @@ Have a good day.`
           if (nextTr) return nextTr;
         }
       } else if (isFb) {
-        // 2. Feedback L2 (Feedback Details)
-        const tr = document.querySelector(
-          '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
-          '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger, ' +
-          '[data-test-id*="feedback_details" i] .ember-power-select-trigger, ' +
-          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
-          '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-          '[title*="Feedback Details" i] ~ .ember-power-select-trigger, ' +
-          '[title*="Feedback Details" i] .ember-power-select-trigger'
-        );
+        // 2. Feedback L2 (Feedback Category / Feedback)
+        const tr = getLiveFeedbackCategoryTrigger();
         if (tr) return tr;
-
-        const byLabel = findFieldTriggerByLabel(/feedback\s*detail/i);
-        if (byLabel) return byLabel;
       } else {
         // 3. Complaints L2 (Complaint Details Food Agg)
         // Direct scoped selectors for Food Agg Details
@@ -5105,7 +5215,11 @@ Have a good day.`
       );
     };
 
-    const getLiveLevel3Trigger = () => {
+    const getLiveLevel3Trigger = (treeType = '') => {
+      const typeLow = (treeType || '').toLowerCase();
+      if (typeLow.includes('feedback')) {
+        return getLiveFeedbackDetailsTrigger();
+      }
       const byLabel = findFieldTriggerByLabel(/^quality$/i);
       if (byLabel) return byLabel;
       return document.querySelector(
@@ -5271,9 +5385,112 @@ Have a good day.`
 
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
       console.log(`[Auto Fill] Start: type="${treeType}", category="${category}", detail="${detail}", subDetail="${subDetail}"`);
+
+      // Dedicated Feedback Auto Fill flow (Type -> Feedback Type -> Feedback -> Feedback Details)
+      if ((treeType || '').toLowerCase().includes('feedback')) {
+        let fbType = '';
+        let fbCategory = '';
+        let fbDetails = subDetail || '';
+
+        const catLow = (category || '').toLowerCase();
+        const detLow = (detail || '').toLowerCase();
+
+        if (['negative', 'positive', 'neutral'].includes(catLow)) {
+          fbType = category;
+          fbCategory = detail;
+        } else if (['negative', 'positive', 'neutral'].includes(detLow)) {
+          fbType = detail;
+          fbCategory = category;
+        } else {
+          fbType = category;
+          fbCategory = detail;
+        }
+
+        // 1. Business Unit -> Check if Food Aggregation is set
+        const buTr = getLiveBusinessUnitTrigger();
+        if (buTr) {
+          const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
+          const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
+          if (!buText.includes('food aggregation')) {
+            showToast('Setting Business unit: Food Aggregation...', 'info');
+            await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 4000);
+            await new Promise(r => setTimeout(r, 200));
+          }
+        }
+
+        // 2. Type -> Feedback
+        const curTypeTr = getLiveTypeTrigger();
+        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
+        const curTypeText = ((curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent) || '').trim().toLowerCase();
+        if (!curTypeText.includes('feedback')) {
+          console.log('[Auto Fill] Setting Type to "Feedback"...');
+          await setDropdownValue(getLiveTypeTrigger, 'Feedback', 4000);
+          await new Promise(r => setTimeout(r, 350));
+          const startWaitAfterType = Date.now();
+          while (Date.now() - startWaitAfterType < 3000) {
+            const tr = getLiveFeedbackTypeTrigger();
+            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+
+        // 3. Feedback Type -> Negative / Positive / Neutral
+        if (fbType) {
+          console.log(`[Auto Fill] Setting Feedback Type to "${fbType}"...`);
+          await setDropdownValue(getLiveFeedbackTypeTrigger, fbType, 4000);
+          await new Promise(r => setTimeout(r, 300));
+          if (fbCategory) {
+            const startWaitCat = Date.now();
+            while (Date.now() - startWaitCat < 4000) {
+              const tr = getLiveFeedbackCategoryTrigger();
+              if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) {
+                await new Promise(r => setTimeout(r, 150));
+                break;
+              }
+              await new Promise(r => setTimeout(r, 50));
+            }
+          }
+        }
+
+        // 4. Feedback -> Products Quality, CX agent, etc.
+        if (fbCategory) {
+          console.log(`[Auto Fill] Setting Feedback to "${fbCategory}"...`);
+          let catOk = false;
+          for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 200));
+            catOk = await setDropdownValue(getLiveFeedbackCategoryTrigger, fbCategory, 4000);
+          }
+          await new Promise(r => setTimeout(r, 300));
+          if (fbDetails) {
+            const startWaitDet = Date.now();
+            while (Date.now() - startWaitDet < 4000) {
+              const tr = getLiveFeedbackDetailsTrigger();
+              if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) {
+                await new Promise(r => setTimeout(r, 150));
+                break;
+              }
+              await new Promise(r => setTimeout(r, 50));
+            }
+          }
+        }
+
+        // 5. Feedback Details -> Quality, Damaged, Taste, Foreign object, Expiry date preference, Size
+        if (fbDetails) {
+          console.log(`[Auto Fill] Setting Feedback Details to "${fbDetails}"...`);
+          let detOk = false;
+          for (let attempt = 0; attempt < 3 && !detOk; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 200));
+            detOk = await setDropdownValue(getLiveFeedbackDetailsTrigger, fbDetails, 4000);
+          }
+        }
+
+        showToast(`✓ Auto Fill Complete: Feedback > ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''}`, 'info');
+        return;
+      }
+
       const getL1 = () => getLiveLevel1Trigger(treeType);
       const getL2 = () => getLiveLevel2Trigger(treeType);
-      const getL3 = () => getLiveLevel3Trigger();
+      const getL3 = () => getLiveLevel3Trigger(treeType);
 
       // 1. Business Unit -> Check if Food Aggregation is set
       const buTr = getLiveBusinessUnitTrigger();
