@@ -755,6 +755,7 @@
 
     let currentSide = 'right';
     let updateTreeMenuPosition = null;
+    let updateSheetsMenuPosition = null;
     try {
       currentSide = localStorage.getItem('bf_buttons_position') || 'right';
     } catch (e) { }
@@ -781,6 +782,9 @@
 
       if (typeof updateTreeMenuPosition === 'function') {
         updateTreeMenuPosition(side);
+      }
+      if (typeof updateSheetsMenuPosition === 'function') {
+        updateSheetsMenuPosition(side);
       }
     };
 
@@ -819,18 +823,23 @@
       return btn;
     };
 
-    const seniorBtn = createBtn('btn-senior-ticket', 'Senior Ticket', '#e63946');
-    const createBtnEl = createBtn('btn-create-ticket', 'Normal Ticket', '#2a9d8f');
-    const rmsBtn = createBtn('btn-rms-order', 'RMS', '#6366f1');
-    const chatBtn = createBtn('btn-chat-search', 'Chat', '#10b981');
-    chatBtn.title = 'Open Customer Chat (Kairos Search)';
-    const delayBtn = createBtn('btn-delay-calc', 'Calculate Delay', '#f59e0b');
-    const calcBtn = createBtn('btn-percentage-calc', 'Calc', '#8b5cf6');
-    calcBtn.title = 'Percentage Calculator';
-    const emailBtn = createBtn('btn-email-templates', 'Email', '#ec4899');
-    emailBtn.title = 'Email Templates Generator';
-    const smsBtn = createBtn('btn-sms-dashboard', 'SMS', '#0ea5e9');
+    // Section 1: Ticket Actions (Calm Blue)
+    const seniorBtn = createBtn('btn-senior-ticket', 'Senior Ticket', '#2563eb');
+    const createBtnEl = createBtn('btn-create-ticket', 'Normal Ticket', '#2563eb');
+
+    // Section 2: Customer & Operations (Calm Teal)
+    const rmsBtn = createBtn('btn-rms-order', 'RMS', '#0d9488');
+    const smsBtn = createBtn('btn-sms-dashboard', 'SMS', '#0d9488');
     smsBtn.title = 'Send SMS (Breadfast Dashboard)';
+    const chatBtn = createBtn('btn-chat-search', 'Chat', '#0d9488');
+    chatBtn.title = 'Open Customer Chat (Kairos Search)';
+
+    // Section 3: Tools & Utilities (Calm Violet)
+    const delayBtn = createBtn('btn-delay-calc', 'Calculate Delay', '#7c3aed');
+    const calcBtn = createBtn('btn-percentage-calc', 'Calc', '#7c3aed');
+    calcBtn.title = 'Percentage Calculator';
+    const emailBtn = createBtn('btn-email-templates', 'Email', '#7c3aed');
+    emailBtn.title = 'Email Templates Generator';
 
     // Helper to detect if an element is inside Freshdesk conversation comments/notes/threads
     const isInsideConversation = (el) => {
@@ -2761,12 +2770,337 @@ Have a good day.`
         }
       };
 
+      // Mapping of common Arabic names to standard English transliteration
+      const ARABIC_FIRST_NAME_MAP = {
+        // Compound / Religious Names
+        'عبدالرحمن': 'Abdelrahman', 'عبد الرحمن': 'Abdelrahman',
+        'عبدالله': 'Abdallah', 'عبد الله': 'Abdallah',
+        'عبدالعزيز': 'Abdelaziz', 'عبد العزيز': 'Abdelaziz',
+        'عبدالحميد': 'Abdelhamid', 'عبد الحميد': 'Abdelhamid',
+        'عبدالفتاح': 'Abdelfattah', 'عبد الفتاح': 'Abdelfattah',
+        'عبدالمنعم': 'Abdelmoneim', 'عبد المنعم': 'Abdelmoneim',
+        'عبدالوهاب': 'Abdelwahab', 'عبد الوهاب': 'Abdelwahab',
+        'عبدالقادر': 'Abdelkader', 'عبد القادر': 'Abdelkader',
+        'عبدالرازق': 'Abdelrazek', 'عبد الرازق': 'Abdelrazek',
+        'عبدالسلام': 'Abdelsalam', 'عبد السلام': 'Abdelsalam',
+        'عبدالجواد': 'Abdelgawad', 'عبد الجواد': 'Abdelgawad',
+        'ابوبكر': 'Abubakr', 'أبو بكر': 'Abubakr', 'ابو بكر': 'Abubakr',
+        'سيف الدين': 'Seif', 'سيفالدين': 'Seif',
+        'نور الدين': 'Nour', 'نورالدين': 'Nour',
+        'ضياء الدين': 'Diaa', 'ضياءالدين': 'Diaa',
+        'حسام الدين': 'Hossam', 'علاء الدين': 'Alaa',
+        'منة الله': 'Menna', 'منه الله': 'Menna',
+
+        // Males (A-Z)
+        'احمد': 'Ahmed', 'أحمد': 'Ahmed', 'إحمد': 'Ahmed',
+        'محمد': 'Mohamed', 'محمَّد': 'Mohamed',
+        'محمود': 'Mahmoud',
+        'مصطفى': 'Mostafa', 'مصطفي': 'Mostafa',
+        'علي': 'Ali', 'على': 'Ali',
+        'عمر': 'Omar',
+        'عمرو': 'Amr',
+        'يوسف': 'Youssef',
+        'ابراهيم': 'Ibrahim', 'إبراهيم': 'Ibrahim',
+        'حسن': 'Hassan',
+        'حسين': 'Hussein',
+        'خالد': 'Khaled',
+        'طارق': 'Tarek',
+        'كريم': 'Karim',
+        'هشام': 'Hesham',
+        'هاني': 'Hany', 'هانى': 'Hany',
+        'وائل': 'Wael',
+        'وليد': 'Waleed',
+        'ياسر': 'Yasser',
+        'ياسين': 'Yassin',
+        'يحيى': 'Yehia', 'يحيي': 'Yehia',
+        'يونس': 'Younis',
+        'اسلام': 'Islam', 'إسلام': 'Islam',
+        'اشرف': 'Ashraf', 'أشرف': 'Ashraf',
+        'ايمن': 'Ayman', 'أيمن': 'Ayman',
+        'حسام': 'Hossam',
+        'حازم': 'Hazem',
+        'حمزة': 'Hamza', 'حمزه': 'Hamza',
+        'سامح': 'Sameh',
+        'شريف': 'Sherif',
+        'عادل': 'Adel',
+        'علاء': 'Alaa',
+        'عصام': 'Essam',
+        'عماد': 'Emad',
+        'ماجد': 'Maged',
+        'مجدي': 'Magdy', 'مجدى': 'Magdy',
+        'مروان': 'Marwan',
+        'مدحت': 'Medhat',
+        'نادر': 'Nader',
+        'نبيل': 'Nabil',
+        'باهر': 'Baher',
+        'باسل': 'Basel',
+        'باسم': 'Bassem',
+        'بيتر': 'Peter',
+        'جورج': 'George',
+        'مينا': 'Mina',
+        'كيرلس': 'Kirollos',
+        'ابانوب': 'Abanoub', 'أبانوب': 'Abanoub',
+        'رامي': 'Ramy', 'رامى': 'Ramy',
+        'رضا': 'Reda',
+        'سامي': 'Samy', 'سامى': 'Samy',
+        'سعيد': 'Saeed',
+        'سيف': 'Seif',
+        'شادي': 'Shady', 'شادى': 'Shady',
+        'صبري': 'Sabry', 'صبرى': 'Sabry',
+        'صلاح': 'Salah',
+        'ضياء': 'Diaa',
+        'عاطف': 'Atef',
+        'فارس': 'Fares',
+        'فادي': 'Fady', 'فادى': 'Fady',
+        'مالك': 'Malek',
+        'معتز': 'Moataz',
+        'مهند': 'Mohanad',
+        'ممدوح': 'Mamdouh',
+        'مؤمن': 'Moamen',
+        'ناصر': 'Nasser',
+        'هيثم': 'Haitham',
+        'زياد': 'Ziad',
+        'زين': 'Zein',
+        'عز': 'Ezz',
+        'عزت': 'Ezzat',
+        'جلال': 'Galal',
+        'جمال': 'Gamal',
+        'كمال': 'Kamal',
+        'رامز': 'Ramez',
+        'تميم': 'Tamim',
+        'ادهم': 'Adham', 'أدهم': 'Adham',
+        'انس': 'Anas', 'أنس': 'Anas',
+        'اكرم': 'Akram', 'أكرم': 'Akram',
+        'امجد': 'Amgad', 'أمجد': 'Amgad',
+        'امير': 'Amir', 'أمير': 'Amir',
+        'ايوب': 'Ayoub', 'أيوب': 'Ayoub',
+        'بلال': 'Belal',
+        'تامر': 'Tamer',
+        'ثروت': 'Tharwat',
+        'جابر': 'Gaber',
+        'جاسر': 'Gasser',
+        'حاتم': 'Hatem',
+        'حافظ': 'Hafez',
+        'راغب': 'Ragheb',
+        'رمزي': 'Ramzy', 'رمزى': 'Ramzy',
+        'زكريا': 'Zakaria',
+        'سليم': 'Selim',
+        'سليمان': 'Soliman',
+        'سمير': 'Samir',
+        'سيد': 'Sayed',
+        'شمس': 'Shams',
+        'صابر': 'Saber',
+        'صادق': 'Sadek',
+        'صبحي': 'Sobhy', 'صبحى': 'Sobhy',
+        'صفوت': 'Safwat',
+        'طه': 'Taha',
+        'طلعت': 'Talaat',
+        'عاصم': 'Assem',
+        'عزمي': 'Azmy', 'عزمى': 'Azmy',
+        'فتحي': 'Fathy', 'فتحى': 'Fathy',
+        'فرج': 'Farag',
+        'فريد': 'Farid',
+        'فكري': 'Fekry', 'فكرى': 'Fekry',
+        'فهد': 'Fahd',
+        'فوزي': 'Fawzy', 'فوزى': 'Fawzy',
+        'فيصل': 'Faisal',
+        'مازن': 'Mazen',
+        'مختار': 'Mokhtar',
+        'مرسي': 'Morsi', 'مرسى': 'Morsi',
+        'منصور': 'Mansour',
+        'منير': 'Mounir',
+        'مهدي': 'Mahdy', 'مهدى': 'Mahdy',
+        'ناجي': 'Nagy',
+        'وجدي': 'Wagdy', 'وجدى': 'Wagdy',
+        'وحيد': 'Waheed',
+        'وسيم': 'Waseem',
+
+        // Females
+        'سارة': 'Sarah', 'ساره': 'Sarah',
+        'نورا': 'Noura', 'نوره': 'Noura', 'نور': 'Nour',
+        'ياسمين': 'Yasmin',
+        'مريم': 'Mariam',
+        'منى': 'Mona',
+        'دينا': 'Dina',
+        'رنا': 'Rana',
+        'ريم': 'Reem',
+        'ريهام': 'Reham',
+        'رانيا': 'Rania',
+        'هبة': 'Heba', 'هبه': 'Heba',
+        'هدير': 'Hadeer',
+        'مي': 'Mai', 'مى': 'Mai',
+        'مروة': 'Marwa', 'مروه': 'Marwa',
+        'ميار': 'Mayar',
+        'ندى': 'Nada',
+        'نهى': 'Noha',
+        'هاجر': 'Hager',
+        'هديل': 'Hadeel',
+        'ولاء': 'Walaa',
+        'وفاء': 'Wafaa',
+        'يمنى': 'Yomna',
+        'اية': 'Aya', 'آية': 'Aya', 'ايه': 'Aya', 'آيه': 'Aya',
+        'اسماء': 'Asmaa', 'أسماء': 'Asmaa',
+        'اسراء': 'Esraa', 'إسراء': 'Esraa',
+        'اميرة': 'Amira', 'أميرة': 'Amira', 'اميره': 'Amira', 'أميره': 'Amira',
+        'ايمان': 'Eman', 'إيمان': 'Eman',
+        'امنية': 'Omnia', 'أمنية': 'Omnia', 'امنيه': 'Omnia', 'أمنيه': 'Omnia',
+        'بسمة': 'Basma', 'بسمه': 'Basma',
+        'بسنت': 'Passant',
+        'بوسي': 'Bossy', 'بوسى': 'Bossy',
+        'تقى': 'Toqa',
+        'جنى': 'Jana', 'جنة': 'Jana', 'جنه': 'Jana',
+        'جيهان': 'Gihan',
+        'حبيبة': 'Habiba', 'حبيبه': 'Habiba',
+        'حنان': 'Hanan',
+        'خلود': 'Kholoud',
+        'داليا': 'Dalia',
+        'دعاء': 'Doaa',
+        'دنيا': 'Donia',
+        'رحاب': 'Rehab',
+        'رحمة': 'Rahma', 'رحمه': 'Rahma',
+        'رضوى': 'Radwa', 'رضوي': 'Radwa',
+        'رقية': 'Roqaya', 'رقيه': 'Roqaya',
+        'روان': 'Rawan',
+        'روضة': 'Rawda', 'روضه': 'Rawda',
+        'زينب': 'Zeinab',
+        'سلمى': 'Salma',
+        'سمر': 'Samar',
+        'سمية': 'Somaya', 'سميه': 'Somaya',
+        'سهام': 'Seham',
+        'سهيلة': 'Sohaila', 'سهيله': 'Sohaila',
+        'شروق': 'Shorouk',
+        'شيماء': 'Shaimaa',
+        'صفا': 'Safaa',
+        'ضحى': 'Doha',
+        'علياء': 'Alyaa',
+        'غادة': 'Ghada', 'غاده': 'Ghada',
+        'فرح': 'Farah',
+        'فريدة': 'Farida', 'فريده': 'Farida',
+        'فاطمة': 'Fatima', 'فاطمه': 'Fatima',
+        'فيروز': 'Fayrouz',
+        'كاريمان': 'Kariman',
+        'لانا': 'Lana',
+        'لمياء': 'Lamia',
+        'ليلى': 'Laila', 'ليلي': 'Laila',
+        'ماجدة': 'Magda', 'ماجده': 'Magda',
+        'مديحة': 'Madiha', 'مديحه': 'Madiha',
+        'ميرنا': 'Mirna',
+        'ملك': 'Malak',
+        'منار': 'Manar',
+        'منة': 'Menna', 'منه': 'Menna',
+        'مها': 'Maha',
+        'نادين': 'Nadine',
+        'ناهد': 'Nahed',
+        'نجلاء': 'Naglaa',
+        'نرمين': 'Nermin',
+        'نشوى': 'Nashwa',
+        'نيفين': 'Nevin', 'نفين': 'Nevin',
+        'نهال': 'Nehal',
+        'نورهان': 'Nourhan',
+        'هايدي': 'Haidy', 'هايدى': 'Haidy',
+        'هالة': 'Hala', 'هاله': 'Hala',
+        'هنا': 'Hana', 'هناء': 'Hana',
+        'هند': 'Hend',
+        'هويدا': 'Howaida', 'هويده': 'Howaida',
+        'يارا': 'Yara'
+      };
+
+      // Fallback phonetic transliteration for unmapped Arabic names
+      const transliterateArabicToLatin = (arabicStr) => {
+        if (!arabicStr) return '';
+        const charMap = {
+          'ا': 'a', 'أ': 'a', 'إ': 'e', 'آ': 'a', 'ء': '', 'ئ': 'y', 'ؤ': 'o',
+          'ب': 'b', 'ت': 't', 'ث': 'th', 'ج': 'g', 'ح': 'h', 'خ': 'kh',
+          'د': 'd', 'ذ': 'z', 'ر': 'r', 'ز': 'z', 'س': 's', 'ش': 'sh',
+          'ص': 's', 'ض': 'd', 'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh',
+          'ف': 'f', 'ق': 'k', 'ك': 'k', 'ل': 'l', 'م': 'm', 'ن': 'n',
+          'ه': 'h', 'ة': 'a', 'و': 'w', 'ي': 'y', 'ى': 'a'
+        };
+
+        let res = '';
+        for (let i = 0; i < arabicStr.length; i++) {
+          const ch = arabicStr[i];
+          res += charMap[ch] !== undefined ? charMap[ch] : ch;
+        }
+        res = res.replace(/aa+/g, 'a').replace(/yy+/g, 'y');
+        if (res.length > 0) {
+          res = res.charAt(0).toUpperCase() + res.slice(1).toLowerCase();
+        }
+        return res;
+      };
+
+      // Helper to extract first name and ensure it is ALWAYS in English
+      const getFirstName = (fullName) => {
+        if (!fullName) return '';
+        let cleaned = fullName.trim();
+
+        // Strip common titles / honorifics
+        cleaned = cleaned.replace(/^(?:mr\.|mrs\.|ms\.|dr\.|eng\.|mr|mrs|ms|dr|eng)\s+/i, '');
+        cleaned = cleaned.replace(/^(?:أستاذ|أستاذة|دكتور|دكتورة|مهندس|مهندسة|أ\.|د\.|م\.)\s+/i, '');
+        cleaned = cleaned.trim();
+
+        // Extract first name (accounting for compound Arabic & English names)
+        let firstWord = '';
+        if (/^عبد\s+\S+/i.test(cleaned)) {
+          const match = cleaned.match(/^عبد\s+\S+/);
+          firstWord = match ? match[0] : '';
+        } else if (/^أبو\s+\S+/i.test(cleaned) || /^ابو\s+\S+/i.test(cleaned)) {
+          const match = cleaned.match(/^(?:أبو|ابو)\s+\S+/);
+          firstWord = match ? match[0] : '';
+        } else if (/^abd\s+el\s+\S+/i.test(cleaned)) {
+          const match = cleaned.match(/^abd\s+el\s+\S+/i);
+          firstWord = match ? match[0] : '';
+        } else if (/^(?:abd|abdel|abdul|abu)\s+\S+/i.test(cleaned)) {
+          const match = cleaned.match(/^(?:abd|abdel|abdul|abu)\s+\S+/i);
+          firstWord = match ? match[0] : '';
+        } else if (/^سيف\s+الدين/i.test(cleaned) || /^نور\s+الدين/i.test(cleaned) || /^ضياء\s+الدين/i.test(cleaned)) {
+          const match = cleaned.match(/^\S+\s+الدين/);
+          firstWord = match ? match[0] : '';
+        } else {
+          firstWord = cleaned.split(/\s+/)[0] || '';
+        }
+
+        firstWord = firstWord.replace(/[\u064B-\u065F\u0670]/g, '').trim();
+
+        // Check if contains Arabic characters -> Convert to English!
+        if (/[\u0600-\u06FF]/.test(firstWord)) {
+          // 1. Direct dictionary match
+          if (ARABIC_FIRST_NAME_MAP[firstWord]) {
+            return ARABIC_FIRST_NAME_MAP[firstWord];
+          }
+          // 2. Normalized dictionary match (alef, yaa, taa marbouta)
+          const normalized = firstWord
+            .replace(/[إأآا]/g, 'ا')
+            .replace(/[ىي]/g, 'ي')
+            .replace(/[ةه]/g, 'ه');
+          for (const key of Object.keys(ARABIC_FIRST_NAME_MAP)) {
+            const keyNorm = key
+              .replace(/[إأآا]/g, 'ا')
+              .replace(/[ىي]/g, 'ي')
+              .replace(/[ةه]/g, 'ه');
+            if (keyNorm === normalized) {
+              return ARABIC_FIRST_NAME_MAP[key];
+            }
+          }
+          // 3. Fallback transliteration
+          return transliterateArabicToLatin(firstWord);
+        }
+
+        // English name normalization (e.g. "AHMED" -> "Ahmed", "ahmed" -> "Ahmed")
+        if (firstWord.length > 0) {
+          return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+        }
+
+        return '';
+      };
+
       const cairoData = getCairoData();
       let activeGreeting = cairoData.greeting;
 
       // Extract details from current Freshdesk page
       const custInfo = extractCustomerInfo();
-      let custName = (custInfo && custInfo.name) ? custInfo.name.trim() : '';
+      const rawCustName = (custInfo && custInfo.name) ? custInfo.name.trim() : '';
+      let custName = getFirstName(rawCustName);
       let orderNo = extractOrderNumber() || '';
       let agentName = '';
       try {
@@ -3091,9 +3425,12 @@ Have a good day.`
           return;
         }
 
+        const rawCust = custNameInput.value.trim();
+        const firstName = getFirstName(rawCust) || rawCust || 'XX';
+
         const params = {
           greeting: activeGreeting,
-          customerName: custNameInput.value.trim() || 'XX',
+          customerName: firstName,
           orderNumber: orderNoInput.value.trim() || 'XXX-XXXXXXX',
           agentName: agentNameInput.value.trim() || 'YY',
           ...extraInputValues
@@ -3152,6 +3489,14 @@ Have a good day.`
         inp.addEventListener('input', updateEmailPreview);
       });
 
+      custNameInput.addEventListener('blur', () => {
+        const converted = getFirstName(custNameInput.value.trim());
+        if (converted && converted !== 'XX') {
+          custNameInput.value = converted;
+          updateEmailPreview();
+        }
+      });
+
       agentNameInput.addEventListener('input', () => {
         try {
           localStorage.setItem('bf_agent_name', agentNameInput.value.trim());
@@ -3163,8 +3508,9 @@ Have a good day.`
       resetBtn.addEventListener('click', () => {
         const freshCust = extractCustomerInfo();
         const freshOrder = extractOrderNumber();
+        const rawName = (freshCust && freshCust.name) ? freshCust.name.trim() : '';
 
-        custNameInput.value = (freshCust && freshCust.name) ? freshCust.name.trim() : '';
+        custNameInput.value = getFirstName(rawName);
         orderNoInput.value = freshOrder || '';
 
         // Recalculate Cairo Time & Greeting
@@ -3334,9 +3680,9 @@ Have a good day.`
     });
 
     // =========================================================================
-    // Tree Button & Cascading Flyout Menu
+    // Tree Button & Cascading Flyout Menu (Ticket Actions - Calm Blue)
     // =========================================================================
-    const treeBtn = createBtn('btn-tree-ticket', 'Tree', '#0284c7');
+    const treeBtn = createBtn('btn-tree-ticket', 'Tree', '#2563eb');
     treeBtn.style.width = '100%';
     treeBtn.style.display = 'flex';
     treeBtn.style.justifyContent = 'center';
@@ -3596,17 +3942,17 @@ Have a good day.`
       const styleEl = document.createElement('style');
       styleEl.id = 'bf-tree-menu-styles';
       styleEl.textContent = `
-        .bf-tree-menu::-webkit-scrollbar {
+        .bf-tree-menu::-webkit-scrollbar, .bf-sheets-menu::-webkit-scrollbar {
           width: 5px;
         }
-        .bf-tree-menu::-webkit-scrollbar-track {
+        .bf-tree-menu::-webkit-scrollbar-track, .bf-sheets-menu::-webkit-scrollbar-track {
           background: transparent;
         }
-        .bf-tree-menu::-webkit-scrollbar-thumb {
+        .bf-tree-menu::-webkit-scrollbar-thumb, .bf-sheets-menu::-webkit-scrollbar-thumb {
           background: #475569;
           border-radius: 4px;
         }
-        .bf-tree-menu::-webkit-scrollbar-thumb:hover {
+        .bf-tree-menu::-webkit-scrollbar-thumb:hover, .bf-sheets-menu::-webkit-scrollbar-thumb:hover {
           background: #64748b;
         }
       `;
@@ -3798,7 +4144,7 @@ Have a good day.`
                   sib.style.backgroundColor = 'transparent';
                 }
               });
-              itemEl.style.backgroundColor = '#0284c7';
+              itemEl.style.backgroundColor = '#2563eb';
               positionAndShowChildMenu();
             }
           });
@@ -3849,6 +4195,9 @@ Have a good day.`
 
     treeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (typeof closeAllSheetsMenus === 'function') {
+        closeAllSheetsMenus();
+      }
       const isOpen = rootMenu.style.display === 'block';
       if (isOpen) {
         closeAllTreeMenus();
@@ -3882,16 +4231,333 @@ Have a good day.`
 
     updateTreeMenuPosition(currentSide);
 
+    // =========================================================================
+    // Sheets Button & Cascading Flyout Menu (KB & Shifts)
+    // =========================================================================
+    const sheetsBtn = createBtn('btn-sheets-menu', 'Sheets', '#7c3aed');
+    sheetsBtn.title = 'Google Sheets Shortcuts (KB & Shifts)';
+    sheetsBtn.style.width = '100%';
+    sheetsBtn.style.display = 'flex';
+    sheetsBtn.style.justifyContent = 'center';
+    sheetsBtn.style.alignItems = 'center';
+
+    const sheetsWrapper = document.createElement('div');
+    sheetsWrapper.id = 'bf-sheets-wrapper';
+    sheetsWrapper.style.position = 'relative';
+    sheetsWrapper.style.width = '100%';
+    sheetsWrapper.appendChild(sheetsBtn);
+
+    // Google Sheets URLs dictionary (Populate with target sheet links)
+    const SHEETS_URLS = {
+      kb_rating: '',
+      kb_retention: '',
+      kb_rider: '',
+      kb_chat: '',
+      shifts_swap_shift: '',
+      shifts_swap_off: '',
+      shifts_vacation: '',
+      shifts_off_queue: '',
+      shifts_late: ''
+    };
+
+    const sheetsData = [
+      {
+        label: 'KB',
+        children: [
+          { label: 'Rating', key: 'kb_rating' },
+          { label: 'Retention', key: 'kb_retention' },
+          { label: 'Rider', key: 'kb_rider' },
+          { label: 'Chat', key: 'kb_chat' }
+        ]
+      },
+      {
+        label: 'Shifts',
+        children: [
+          { label: 'Swap shift', key: 'shifts_swap_shift' },
+          { label: 'Swap off', key: 'shifts_swap_off' },
+          { label: 'Vacation', key: 'shifts_vacation' },
+          { label: 'Off queue', key: 'shifts_off_queue' },
+          { label: 'Late', key: 'shifts_late' }
+        ]
+      }
+    ];
+
+    let rootSheetsMenu = null;
+    const activeSheetsSubmenusByDepth = {};
+
+    const closeAllSheetsMenus = () => {
+      if (rootSheetsMenu) rootSheetsMenu.style.display = 'none';
+      const allSubmenus = sheetsWrapper.querySelectorAll('.bf-sheets-menu:not(.bf-sheets-menu-root)');
+      allSubmenus.forEach(sm => sm.style.display = 'none');
+      Object.keys(activeSheetsSubmenusByDepth).forEach(k => delete activeSheetsSubmenusByDepth[k]);
+      sheetsWrapper.querySelectorAll('.bf-sheets-item').forEach(el => {
+        el.style.backgroundColor = 'transparent';
+      });
+    };
+
+    const closeSheetsSubmenusFromDepth = (depth) => {
+      Object.keys(activeSheetsSubmenusByDepth).forEach(d => {
+        if (parseInt(d, 10) >= depth) {
+          if (activeSheetsSubmenusByDepth[d]) {
+            activeSheetsSubmenusByDepth[d].style.display = 'none';
+          }
+          delete activeSheetsSubmenusByDepth[d];
+        }
+      });
+      sheetsWrapper.querySelectorAll('.bf-sheets-item').forEach(el => {
+        if (el._childMenu && el._childMenu.style.display === 'none') {
+          el.style.backgroundColor = 'transparent';
+        }
+      });
+    };
+
+    const buildSheetsSubmenu = (items, isRoot = false, path = [], depth = 0) => {
+      const menu = document.createElement('div');
+      menu.className = 'bf-sheets-menu' + (isRoot ? ' bf-sheets-menu-root' : '');
+      menu.style.backgroundColor = '#1e293b';
+      menu.style.color = '#f8fafc';
+      menu.style.borderRadius = '8px';
+      menu.style.padding = '6px';
+      menu.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3)';
+      menu.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+      menu.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      menu.style.fontSize = '12px';
+      menu.style.userSelect = 'none';
+      menu.style.display = 'none';
+      menu.style.minWidth = isRoot ? '140px' : '170px';
+      menu.style.maxWidth = isRoot ? '180px' : '220px';
+
+      if (!isRoot) {
+        menu.style.position = 'fixed';
+        menu.style.maxHeight = '320px';
+        menu.style.overflowY = 'auto';
+        menu.style.overflowX = 'hidden';
+        menu.style.scrollbarWidth = 'thin';
+        menu.style.scrollbarColor = '#475569 transparent';
+        menu.style.zIndex = (1000000 + depth * 10).toString();
+      } else {
+        menu.style.position = 'absolute';
+        menu.style.zIndex = '1000000';
+        menu.style.bottom = '0';
+        if (currentSide === 'right') {
+          menu.style.right = 'calc(100% + 8px)';
+          menu.style.left = 'auto';
+        } else {
+          menu.style.left = 'calc(100% + 8px)';
+          menu.style.right = 'auto';
+        }
+      }
+
+      const listContainer = document.createElement('div');
+      listContainer.className = 'bf-sheets-list-container';
+      listContainer.style.display = 'flex';
+      listContainer.style.flexDirection = 'column';
+      listContainer.style.gap = '2px';
+      menu.appendChild(listContainer);
+
+      items.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'bf-sheets-item';
+        itemEl.style.position = 'relative';
+        itemEl.style.display = 'flex';
+        itemEl.style.alignItems = 'center';
+        itemEl.style.justifyContent = 'space-between';
+        itemEl.style.padding = '6px 10px';
+        itemEl.style.borderRadius = '5px';
+        itemEl.style.cursor = 'pointer';
+        itemEl.style.transition = 'background-color 0.15s ease, color 0.15s ease';
+        itemEl.style.whiteSpace = 'nowrap';
+        itemEl.style.gap = '8px';
+
+        const textSpan = document.createElement('span');
+        textSpan.textContent = item.label;
+        textSpan.style.fontWeight = '500';
+        textSpan.style.fontSize = '12px';
+        textSpan.style.overflow = 'hidden';
+        textSpan.style.textOverflow = 'ellipsis';
+        itemEl.appendChild(textSpan);
+
+        if (item.children && item.children.length > 0) {
+          const arrow = document.createElement('span');
+          arrow.className = 'bf-sheets-arrow';
+          arrow.textContent = currentSide === 'right' ? '◂' : '▸';
+          arrow.style.fontSize = '11px';
+          arrow.style.opacity = '0.8';
+          itemEl.appendChild(arrow);
+
+          const currentPath = [...path, item.label];
+          const childMenu = buildSheetsSubmenu(item.children, false, currentPath, depth + 1);
+          itemEl._childMenu = childMenu;
+          sheetsWrapper.appendChild(childMenu);
+
+          const positionAndShowChildMenu = () => {
+            closeSheetsSubmenusFromDepth(depth + 1);
+            activeSheetsSubmenusByDepth[depth + 1] = childMenu;
+
+            const rect = itemEl.getBoundingClientRect();
+            childMenu.style.display = 'block';
+
+            // Horizontal positioning
+            const menuWidth = childMenu.offsetWidth || 170;
+            if (currentSide === 'right') {
+              let rightPos = window.innerWidth - rect.left + 4;
+              if (rect.left - menuWidth < 10) {
+                childMenu.style.left = `${rect.right + 4}px`;
+                childMenu.style.right = 'auto';
+              } else {
+                childMenu.style.right = `${rightPos}px`;
+                childMenu.style.left = 'auto';
+              }
+            } else {
+              let leftPos = rect.right + 4;
+              if (leftPos + menuWidth > window.innerWidth - 10) {
+                childMenu.style.right = `${window.innerWidth - rect.left + 4}px`;
+                childMenu.style.left = 'auto';
+              } else {
+                childMenu.style.left = `${leftPos}px`;
+                childMenu.style.right = 'auto';
+              }
+            }
+
+            // Vertical positioning
+            const menuHeight = Math.min(childMenu.offsetHeight || 220, 220);
+            let topPos = rect.top - 4;
+            if (topPos + menuHeight > window.innerHeight - 10) {
+              topPos = Math.max(10, window.innerHeight - menuHeight - 10);
+            }
+            if (topPos < 10) topPos = 10;
+            childMenu.style.top = `${topPos}px`;
+          };
+
+          itemEl.addEventListener('mouseenter', () => {
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = '#334155';
+            }
+          });
+
+          itemEl.addEventListener('mouseleave', () => {
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = 'transparent';
+            }
+          });
+
+          itemEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (childMenu.style.display === 'block') {
+              closeSheetsSubmenusFromDepth(depth + 1);
+              itemEl.style.backgroundColor = 'transparent';
+            } else {
+              listContainer.querySelectorAll('.bf-sheets-item').forEach(sib => {
+                if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
+                  sib.style.backgroundColor = 'transparent';
+                }
+              });
+              itemEl.style.backgroundColor = '#7c3aed';
+              positionAndShowChildMenu();
+            }
+          });
+        } else {
+          // Leaf item
+          itemEl.addEventListener('mouseenter', () => {
+            itemEl.style.backgroundColor = '#334155';
+          });
+          itemEl.addEventListener('mouseleave', () => {
+            itemEl.style.backgroundColor = 'transparent';
+          });
+
+          itemEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllSheetsMenus();
+
+            const url = SHEETS_URLS[item.key];
+            const category = path[0] || 'Sheets';
+            if (url && typeof url === 'string' && url.trim().length > 0) {
+              showToast(`Opening [${category}] ${item.label}...`, 'info');
+              window.open(url.trim(), '_blank', 'noopener,noreferrer');
+            } else {
+              showToast(`[Sheets] "${item.label}" selected (Link will be added soon)`, 'info');
+            }
+          });
+        }
+
+        listContainer.appendChild(itemEl);
+      });
+
+      return menu;
+    };
+
+    rootSheetsMenu = buildSheetsSubmenu(sheetsData, true, []);
+    sheetsWrapper.appendChild(rootSheetsMenu);
+
+    sheetsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof closeAllTreeMenus === 'function') {
+        closeAllTreeMenus();
+      }
+      const isOpen = rootSheetsMenu.style.display === 'block';
+      if (isOpen) {
+        closeAllSheetsMenus();
+      } else {
+        closeAllSheetsMenus();
+        rootSheetsMenu.style.display = 'block';
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!sheetsWrapper.contains(e.target)) {
+        closeAllSheetsMenus();
+      }
+    });
+
+    updateSheetsMenuPosition = (side) => {
+      if (!rootSheetsMenu) return;
+      if (side === 'right') {
+        rootSheetsMenu.style.right = 'calc(100% + 8px)';
+        rootSheetsMenu.style.left = 'auto';
+      } else {
+        rootSheetsMenu.style.left = 'calc(100% + 8px)';
+        rootSheetsMenu.style.right = 'auto';
+      }
+      const arrows = sheetsWrapper.querySelectorAll('.bf-sheets-arrow');
+      arrows.forEach(ar => {
+        ar.textContent = side === 'right' ? '◂' : '▸';
+      });
+      closeAllSheetsMenus();
+    };
+
+    updateSheetsMenuPosition(currentSide);
+
     container.appendChild(headerRow);
+
+    const createSectionDivider = () => {
+      const div = document.createElement('div');
+      div.className = 'bf-section-divider';
+      div.style.height = '1px';
+      div.style.backgroundColor = 'rgba(255, 255, 255, 0.15)';
+      div.style.margin = '2px 0';
+      return div;
+    };
+
+    // Section 1: Ticket Actions (Calm Blue)
     container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
     container.appendChild(treeWrapper);
+
+    container.appendChild(createSectionDivider());
+
+    // Section 2: Customer & Operations (Calm Teal: RMS -> SMS -> Chat)
     container.appendChild(rmsBtn);
+    container.appendChild(smsBtn);
     container.appendChild(chatBtn);
+
+    container.appendChild(createSectionDivider());
+
+    // Section 3: Tools & Utilities (Calm Violet)
     container.appendChild(delayBtn);
     container.appendChild(calcBtn);
     container.appendChild(emailBtn);
-    container.appendChild(smsBtn);
+    container.appendChild(sheetsWrapper);
+
     document.body.appendChild(container);
   }
 
