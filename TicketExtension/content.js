@@ -1981,6 +1981,10 @@
       const openKairos = (query, label) => {
         showToast(`Customer Chat opened (${label})`, 'info');
         const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(query)}`;
+        if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+          window.open(kairosUrl, '_blank', 'noopener,noreferrer');
+          return;
+        }
         try {
           chrome.runtime.sendMessage({ action: 'open_kairos_search', url: kairosUrl }, () => {
             if (chrome.runtime.lastError) {
@@ -2033,6 +2037,12 @@
         }
       }, 4200);
 
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+        finish();
+        showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
+        return;
+      }
+
       try {
         chrome.runtime.sendMessage({ action: 'open_chat_search', url: orderLink }, (response) => {
           if (isFinished) return;
@@ -2056,6 +2066,8 @@
           finish();
           if (uid) {
             openKairos(uid, `ID ${uid}`);
+          } else if ((err.message || '').includes('sendMessage') || (err.message || '').includes('Extension context invalidated')) {
+            showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
           } else {
             showToast('Extension error: ' + err.message, 'error');
           }
@@ -2098,6 +2110,12 @@
         }
       }, 6000);
 
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
+        finish();
+        showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
+        return;
+      }
+
       try {
         chrome.runtime.sendMessage({ action: 'calculate_delay', url: orderLink }, (response) => {
           if (isFinished) return;
@@ -2131,7 +2149,11 @@
       } catch (e) {
         if (!isFinished) {
           finish();
-          showToast('Extension error: ' + e.message, 'error');
+          if ((e.message || '').includes('sendMessage') || (e.message || '').includes('Extension context invalidated')) {
+            showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
+          } else {
+            showToast('Extension error: ' + e.message, 'error');
+          }
         }
       }
     }
