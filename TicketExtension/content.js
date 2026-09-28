@@ -827,6 +827,10 @@
     const delayBtn = createBtn('btn-delay-calc', 'Calculate Delay', '#f59e0b');
     const calcBtn = createBtn('btn-percentage-calc', 'Calc', '#8b5cf6');
     calcBtn.title = 'Percentage Calculator';
+    const emailBtn = createBtn('btn-email-templates', 'Email', '#ec4899');
+    emailBtn.title = 'Email Templates Generator';
+    const smsBtn = createBtn('btn-sms-dashboard', 'SMS', '#0ea5e9');
+    smsBtn.title = 'Send SMS (Breadfast Dashboard)';
 
     // Helper to detect if an element is inside Freshdesk conversation comments/notes/threads
     const isInsideConversation = (el) => {
@@ -983,6 +987,56 @@
       }
 
       // NEVER return arbitrary agent links!
+      return null;
+    }
+
+    function extractCustomerId() {
+      // 1. Try UID from switcher, unique external ID, user profile
+      const uid = extractUidWithValidation();
+      if (uid) return uid;
+
+      // 2. Check sidebar fields by data-test-id
+      const testIdEls = Array.from(document.querySelectorAll(
+        '[data-test-id*="customer_id" i], [data-test-id*="customer_uid" i], ' +
+        '[data-test-id*="unique_external_id" i], [data-test-id*="cf_uid" i]'
+      )).filter(el => !isInsideConversation(el) && !isInsideAgent(el));
+
+      for (const el of testIdEls) {
+        const digits = (el.textContent || '').replace(/[^\d]/g, '');
+        if (digits.length >= 3 && digits.length <= 12) return digits;
+      }
+
+      // 3. Check labels in sidebar (e.g. "Customer ID", "User ID", "UID")
+      const labels = Array.from(document.querySelectorAll('label, .field-label, dt, th, span, div'))
+        .filter(el => !isInsideConversation(el) && !isInsideAgent(el));
+
+      for (const label of labels) {
+        const text = (label.textContent || '').trim().toLowerCase();
+        if (text === 'customer id' || text === 'user id' || text === 'uid' || text === 'customer uid' || text === 'unique external id') {
+          const container = label.closest('.field-container, .form-group, tr, div') || label.parentElement;
+          if (container) {
+            const valEl = container.querySelector('[data-test-field-content], dd, .value, span, div:not(:first-child)');
+            const content = (valEl ? valEl.textContent : container.textContent) || '';
+            const digits = content.replace(/[^\d]/g, '');
+            if (digits.length >= 3 && digits.length <= 12) return digits;
+          }
+        }
+      }
+
+      // 4. Check links with customerId= or customer_id= or uid= anywhere outside conversation
+      const idLinks = Array.from(document.querySelectorAll('a[href*="customerId=" i], a[href*="customer_id=" i], a[href*="uid=" i]'))
+        .filter(el => !isInsideConversation(el) && !isInsideAgent(el));
+
+      for (const a of idLinks) {
+        const href = a.href || a.getAttribute('href') || '';
+        const m = href.match(/(?:customerId|customer_id|uid)=(\d+)/i);
+        if (m && m[1]) return m[1];
+      }
+
+      // 5. Fallback to Freshdesk contact ID
+      const contactId = extractContactId();
+      if (contactId) return contactId;
+
       return null;
     }
 
@@ -1205,6 +1259,11 @@
         cleaned = cleaned.substring(2);
       }
 
+      // Handle +20 010... (extra 0 after 20 -> 2001[0125] -> 201[0125])
+      if (cleaned.startsWith('2001') && cleaned.length === 13) {
+        cleaned = '20' + cleaned.substring(3);
+      }
+
       // Egyptian mobile: 010, 011, 012, 015 (11 digits) -> prefix with 2 -> 201x xxxxxxxx (12 digits)
       if (cleaned.startsWith('01') && cleaned.length === 11) {
         cleaned = '2' + cleaned;
@@ -1217,10 +1276,18 @@
         return cleaned;
       }
 
+      // Egyptian landlines (10 digits starting with 02 or 03 -> 202..., 203...)
+      if (cleaned.startsWith('0') && cleaned.length === 10) {
+        cleaned = '2' + cleaned;
+      }
+      if (/^20[2-9]\d{7,8}$/.test(cleaned)) {
+        return cleaned;
+      }
+
       // International phone: 10 to 15 digits
       if (cleaned.length >= 10 && cleaned.length <= 15) {
-        // Strictly reject order numbers (13 digits starting with 2[0-9]{3} like 2809100214792)
-        if (cleaned.length === 13 && /^(?:2\d{3})/.test(cleaned)) {
+        // Strictly reject order numbers (13 digits starting with 2[1-9] like 2809100214792)
+        if (cleaned.length === 13 && /^2[1-9]/.test(cleaned)) {
           return null;
         }
         return cleaned;
@@ -1230,41 +1297,45 @@
     }
 
     function extractCustomerPhone() {
-      // 1. Direct and exact Freshdesk contact sidebar selectors (from user's screenshot)
+      // 1. Direct tel: links on Freshdesk (outside agent assignee cards and conversation)
+      const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'))
+        .filter(el => !isInsideAgent(el) && !isInsideConversation(el));
+      for (const a of telLinks) {
+        const raw = (a.getAttribute('href') || '').replace(/^tel:/i, '').trim();
+        const p = formatPhoneForKairos(raw);
+        if (p) return p;
+      }
+
+      // 2. Direct exact Freshdesk contact sidebar selectors
       const exactSelectors = [
-        '[data-test-field-content="Work phone" i]',
-        '[data-test-id="fields-info-phone" i] [data-test-field-content]',
-        '[data-test-id="fields-info-phone" i] .text__content',
+        '[data-test-field-title="Work phone" i]',
+        '[data-test-field-title="Mobile phone" i]',
+        '[data-test-field-title="Phone" i]',
+        '[data-test-field-title="Mobile" i]',
+        '[data-test-field-name="work_phone" i]',
+        '[data-test-field-name="mobile" i]',
+        '[data-test-field-name="phone" i]',
         '[data-test-id="fields-info-phone" i]',
-        '[data-test-field-content="Mobile phone" i]',
-        '[data-test-id="fields-info-mobile" i] [data-test-field-content]',
-        '[data-test-id="fields-info-mobile" i] .text__content',
-        '[data-test-id="fields-info-mobile" i]'
+        '[data-test-id="fields-info-mobile" i]',
+        '[data-test-id="contact-phone" i]',
+        '[data-test-id="contact-mobile" i]',
+        '[data-test-id*="phone" i]',
+        '[data-test-id*="mobile" i]'
       ];
 
       for (const sel of exactSelectors) {
-        const el = document.querySelector(sel);
-        if (el && !isInsideConversation(el) && !isInsideAgent(el)) {
-          const text = (el.textContent || '').trim();
+        const els = Array.from(document.querySelectorAll(sel))
+          .filter(el => !isInsideAgent(el) && !isInsideConversation(el));
+        for (const el of els) {
+          const container = el.closest('[data-test-id*="field"], .field-container, .ember-view') || el.parentElement;
+          const searchIn = container || el;
+          const text = (searchIn.textContent || '').trim();
           const p = formatPhoneForKairos(text);
           if (p) return p;
-          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d|\+?\d{10,15}/);
+          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?0?1[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d|\+?\d{10,15}/);
           if (m) {
             const p2 = formatPhoneForKairos(m[0]);
             if (p2) return p2;
-          }
-        }
-      }
-
-      // 2. Search by [data-test-field-title="Work phone"]
-      const titleEl = document.querySelector('[data-test-field-title="Work phone" i], [data-test-field-title="Mobile phone" i], [data-test-field-title="Phone" i]');
-      if (titleEl && !isInsideConversation(titleEl) && !isInsideAgent(titleEl)) {
-        const parent = titleEl.parentElement;
-        if (parent) {
-          const content = parent.querySelector('[data-test-field-content]') || titleEl.nextElementSibling;
-          if (content) {
-            const p = formatPhoneForKairos(content.textContent);
-            if (p) return p;
           }
         }
       }
@@ -1276,16 +1347,9 @@
       )).filter(el => !isInsideConversation(el) && !isInsideAgent(el));
 
       for (const container of requesterContainers) {
-        const telLinks = Array.from(container.querySelectorAll('a[href^="tel:"]'));
-        for (const a of telLinks) {
-          const raw = (a.getAttribute('href') || '').replace(/^tel:/i, '').trim();
-          const phone = formatPhoneForKairos(raw);
-          if (phone) return phone;
-        }
-
         const text = (container.textContent || '').trim();
-        if (/work\s*phone|phone|mobile/i.test(text)) {
-          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
+        if (/work\s*phone|phone|mobile|هاتف|موبايل/i.test(text)) {
+          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?0?1[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
           if (m) {
             const phone = formatPhoneForKairos(m[0]);
             if (phone) return phone;
@@ -1293,17 +1357,47 @@
         }
       }
 
+      // 4. Ticket properties custom fields (e.g. cf_phone, cf_customer_phone)
+      const propContainers = Array.from(document.querySelectorAll(
+        '[data-test-id*="cf_phone" i], [data-test-id*="cf_customer_phone" i], [data-test-id*="cf_mobile" i]'
+      )).filter(el => !isInsideConversation(el) && !isInsideAgent(el));
+
+      for (const container of propContainers) {
+        const text = (container.textContent || '').trim();
+        const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?0?1[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
+        if (m) {
+          const phone = formatPhoneForKairos(m[0]);
+          if (phone) return phone;
+        }
+      }
+
       return null;
     }
 
     function handleChat(btnEl) {
+      if (btnEl.dataset.loading === 'true') return;
+      btnEl.dataset.loading = 'true';
       const origText = btnEl.textContent;
+
+      let isFinished = false;
+      const finish = () => {
+        if (isFinished) return;
+        isFinished = true;
+        clearTimeout(safetyTimer);
+        btnEl.textContent = origText;
+        btnEl.style.pointerEvents = 'auto';
+        btnEl.dataset.loading = 'false';
+      };
 
       const openKairos = (query, label) => {
         showToast(`Customer Chat opened (${label})`, 'info');
         const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(query)}`;
         try {
-          chrome.runtime.sendMessage({ action: 'open_kairos_search', url: kairosUrl });
+          chrome.runtime.sendMessage({ action: 'open_kairos_search', url: kairosUrl }, () => {
+            if (chrome.runtime.lastError) {
+              window.open(kairosUrl, '_blank', 'noopener,noreferrer');
+            }
+          });
         } catch (e) {
           window.open(kairosUrl, '_blank', 'noopener,noreferrer');
         }
@@ -1312,57 +1406,94 @@
       // 1. Instant check for "Work phone" / Contact phone directly on Freshdesk page (0ms!)
       const pagePhone = extractCustomerPhone();
       if (pagePhone) {
+        finish();
         openKairos(pagePhone, pagePhone);
         return;
       }
 
-      // 2. Fallback check for UID
+      // 2. Check for UID
       const uid = extractUidWithValidation();
-      const fallbackToUid = () => {
-        if (uid) {
-          openKairos(uid, `ID ${uid}`);
-          return true;
-        }
-        return false;
-      };
 
       // 3. Search Phone from Order page
       const orderLink = findOrderLink();
       if (!orderLink) {
+        finish();
         // If no order link on page, fallback to UID if available
-        if (fallbackToUid()) return;
+        if (uid) {
+          openKairos(uid, `ID ${uid}`);
+          return;
+        }
         showToast('Could not find Customer Phone, Order link, or UID on this ticket.', 'error');
         return;
       }
 
+      // Set button to Searching state
       btnEl.textContent = 'Searching...';
       btnEl.style.pointerEvents = 'none';
 
-      chrome.runtime.sendMessage({ action: 'open_chat_search', url: orderLink }, (response) => {
-        btnEl.textContent = origText;
-        btnEl.style.pointerEvents = 'auto';
+      // 4.2-second hard safety timeout: button will NEVER stay stuck!
+      const safetyTimer = setTimeout(() => {
+        if (!isFinished) {
+          console.warn('[BF Extension] Chat search safety timeout fired. Resetting button.');
+          finish();
+          if (uid) {
+            openKairos(uid, `ID ${uid}`);
+          } else {
+            showToast('Search timed out. Please check order page or retry.', 'error');
+          }
+        }
+      }, 4200);
 
-        if (chrome.runtime.lastError || !response || !response.success || !response.phone) {
-          // Phone not found from Order page -> Fallback to searching with UID!
-          if (fallbackToUid()) {
+      try {
+        chrome.runtime.sendMessage({ action: 'open_chat_search', url: orderLink }, (response) => {
+          if (isFinished) return;
+          finish();
+
+          if (chrome.runtime.lastError || !response || !response.success || !response.phone) {
+            // Phone not found from Order page -> Fallback to searching with UID!
+            if (uid) {
+              openKairos(uid, `ID ${uid}`);
+              return;
+            }
+            const err = response?.error || chrome.runtime.lastError?.message || 'Failed to find customer phone number from Order page.';
+            showToast(err, 'error');
             return;
           }
-          const err = response?.error || chrome.runtime.lastError?.message || 'Failed to find customer phone number from Order page.';
-          showToast(err, 'error');
-          return;
-        }
 
-        showToast(`Customer Chat opened (${response.phone})`, 'info');
-      });
+          showToast(`Customer Chat opened (${response.phone})`, 'info');
+        });
+      } catch (err) {
+        if (!isFinished) {
+          finish();
+          if (uid) {
+            openKairos(uid, `ID ${uid}`);
+          } else {
+            showToast('Extension error: ' + err.message, 'error');
+          }
+        }
+      }
     }
 
     chatBtn.addEventListener('click', () => handleChat(chatBtn));
 
     function handleCalculateDelay(btnEl) {
+      if (btnEl.dataset.loading === 'true') return;
+      btnEl.dataset.loading = 'true';
       const origText = btnEl.textContent;
       const orderLink = findOrderLink();
 
+      let isFinished = false;
+      const finish = () => {
+        if (isFinished) return;
+        isFinished = true;
+        clearTimeout(safetyTimer);
+        btnEl.textContent = origText;
+        btnEl.style.pointerEvents = 'auto';
+        btnEl.dataset.loading = 'false';
+      };
+
       if (!orderLink) {
+        finish();
         showToast('Could not find Order link on this ticket.', 'error');
         return;
       }
@@ -1370,39 +1501,55 @@
       btnEl.textContent = 'Calculating...';
       btnEl.style.pointerEvents = 'none';
 
-      chrome.runtime.sendMessage({ action: 'calculate_delay', url: orderLink }, (response) => {
-        btnEl.textContent = origText;
-        btnEl.style.pointerEvents = 'auto';
-
-        if (chrome.runtime.lastError) {
-          console.error('[BF Extension]', chrome.runtime.lastError);
-          showToast('Extension error: ' + chrome.runtime.lastError.message, 'error');
-          return;
+      // Safety timeout: reset button if background hangs
+      const safetyTimer = setTimeout(() => {
+        if (!isFinished) {
+          finish();
+          showToast('Calculation timed out. Please retry.', 'error');
         }
+      }, 6000);
 
-        if (!response) {
-          showToast('No response received from background service worker.', 'error');
-          return;
-        }
+      try {
+        chrome.runtime.sendMessage({ action: 'calculate_delay', url: orderLink }, (response) => {
+          if (isFinished) return;
+          finish();
 
-        if (!response.success) {
-          showToast(response.error || 'Failed to calculate delay.', 'error');
-          return;
-        }
+          if (chrome.runtime.lastError) {
+            console.error('[BF Extension]', chrome.runtime.lastError);
+            showToast('Extension error: ' + chrome.runtime.lastError.message, 'error');
+            return;
+          }
 
-        const { diff, promisedTime, completedTime } = response;
-        if (diff > 0) {
-          showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
-        } else if (diff < 0) {
-          showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
-        } else {
-          showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
+          if (!response) {
+            showToast('No response received from background service worker.', 'error');
+            return;
+          }
+
+          if (!response.success) {
+            showToast(response.error || 'Failed to calculate delay.', 'error');
+            return;
+          }
+
+          const { diff, promisedTime, completedTime } = response;
+          if (diff > 0) {
+            showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
+          } else if (diff < 0) {
+            showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
+          } else {
+            showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
+          }
+        });
+      } catch (e) {
+        if (!isFinished) {
+          finish();
+          showToast('Extension error: ' + e.message, 'error');
         }
-      });
+      }
     }
 
     delayBtn.addEventListener('click', () => handleCalculateDelay(delayBtn));
     calcBtn.addEventListener('click', () => openPercentageCalcModal());
+    emailBtn.addEventListener('click', () => openEmailModal());
 
     // =========================================================================
     // Percentage Calculator Popup Modal
@@ -1805,6 +1952,1350 @@
       setTimeout(() => amountInput.focus(), 50);
     }
 
+    // =========================================================================
+    // Email Templates Generator Popup Modal
+    // =========================================================================
+    function openEmailModal() {
+      const existing = document.getElementById('bf-email-modal');
+      if (existing) {
+        existing.remove();
+        return;
+      }
+
+      const CATEGORIES = [
+        'All Categories',
+        'No Answer & Contact',
+        'Food & Quality',
+        'Packaging & Items',
+        'Delivery & Driver',
+        'Payment & Pricing',
+        'Feedback & Replies'
+      ];
+
+      const EMAIL_TEMPLATES = [
+        // 1. No Answer & Contact
+        {
+          id: 'no_answer',
+          category: 'No Answer & Contact',
+          name: 'No answer email (Rating)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}.
+I have tried to reach you over the phone to apologize and resolve it in person. Unfortunately, I am unable to reach you. You can reach out to our team via our in-app support or at CX@breadfast.com to help solve the issue. Please do feel free to request a phone call clarifying a suitable time for it if you’d still prefer that we contact you over the phone.
+We’re all more than eager to assist.
+Regards,
+Breadfast Team`
+        },
+        {
+          id: 'fh_no_answer',
+          category: 'No Answer & Contact',
+          name: 'FH no answer (Complaint)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the complaint you have submitted recently for order #${p.orderNumber}.
+I have tried to reach you over the phone to apologize and resolve it in person. Unfortunately, I am unable to reach you. Please do get back to me with a suitable time and number to contact you as soon as possible. You can also reach out to the rest of the team via our in-app chat or at CX@breadfast.com.
+We’re all more than eager to assist.
+Regards,
+Breadfast Team`
+        },
+        {
+          id: 'retention_request_call',
+          category: 'No Answer & Contact',
+          name: 'Request a call for severe cases (Retention)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. Please accept my sincerest apologies for the issue that you faced with your order #${p.orderNumber}.
+One of our complaint team members will contact you ASAP.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+
+        // 2. Food & Quality
+        {
+          id: 'quality_issue',
+          category: 'Food & Quality',
+          name: 'Quality issue (Taste, filling, topping, rotten, smell)',
+          extraFields: [
+            { key: 'issueType', label: 'Issue Type', default: 'quality', placeholder: 'quality/filling/topping/taste/smell' },
+            { key: 'item', label: 'Product Name', default: 'item', placeholder: 'Product name' },
+            { key: 'refundPercent', label: 'Refund %', default: '50%', placeholder: 'e.g. 50%' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'XX EGP', placeholder: 'e.g. 60 EGP' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}, as you mentioned that the ${p.issueType || 'quality'} of the ${p.item || 'item'} isn’t up to par.
+Please accept my sincerest apologies for the quality of your ${p.item || 'item'}. I assure you that I have escalated this to our quality team to investigate further so that it doesn’t recur. It will be of great assistance in our investigation if you can provide us with a picture of the product.
+As a small apology, we refunded you ${p.refundPercent || '50%'} of the total amount, which is ${p.refundAmount || 'XX'}.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us via this email or via in-app chat.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'foodborne_poisoning',
+          category: 'Food & Quality',
+          name: 'Foodborne / Poisoning',
+          extraFields: [
+            { key: 'item', label: 'Product Name', default: 'food', placeholder: 'Product name' },
+            { key: 'voucherAmount', label: 'Voucher Amount', default: '50 EGP', placeholder: 'e.g. 50 EGP' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you got sick after eating the ${p.item || 'item'}.
+Please accept my sincerest apologies for the issue, and we would like to know if there were any quality issues with the ${p.item || 'item'}.
+Also, for more information, please let me know about this quations
+1- What symptoms appeared?
+2- Time between symptoms appearing and eating?
+3- The number of people who ate compared to the people who showed symptoms?
+4- Age of the affected consumer?
+5- Any allergens for the consumer in the item consumed?
+6- Has the customer consumed any food before?
+Also, please accept my apologies for this case, and as a small apology, the item amount will be added to your wallet, and an ${p.voucherAmount || 'XX'} voucher will be added to your wallet within 24 hours.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us.
+Awaiting your reply.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'foreign_objects',
+          category: 'Food & Quality',
+          name: 'Foreign Objects',
+          extraFields: [
+            { key: 'foreignObject', label: 'Foreign Object', default: 'foreign object', placeholder: 'hair / insect / etc.' },
+            { key: 'item', label: 'Product Name', default: 'product', placeholder: 'Product name' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'item amount', placeholder: 'Refund amount' },
+            { key: 'voucherAmount', label: 'Voucher', default: '50 EGP', placeholder: 'Voucher amount' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned there is a ${p.foreignObject || 'foreign object'} in your ${p.item || 'product'}. I have tried to reach you over the phone, but I’m not able to.
+Please accept my sincerest apologies for the quality of your ${p.item || 'product'}. I assure you we will take all necessary actions immediately as follows:
+We will check all of our available stock to make sure this doesn’t occur again with you or any other customer.
+We will take all the actions to prevent this from happening again and get back to you with feedback.
+It will be of great assistance in our investigation if you can provide us with a picture of the product.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time.
+Also, as an apology, I've just refunded you the ${p.refundAmount || 'item'} amount, with ${p.voucherAmount || 'XX'} voucher will be added within 24 hours to your wallet.
+Awaiting your feedback.
+Regards,
+Breadfast team.`
+        },
+        {
+          id: 'size_weight_issue',
+          category: 'Food & Quality',
+          name: 'Size / Weight issue',
+          extraFields: [
+            { key: 'item', label: 'Product Name', default: 'product', placeholder: 'Product name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that ${p.item || 'product'} is getting smaller every time you order it now.
+Please accept my sincerest apologies for the size of your ${p.item || 'product'}. I assure you that I have escalated this issue to our quality team to investigate further with the restaurant for any size changes so that it doesn’t recur. Also, could you please inform us if this is the first time you tried it? We also need a product Photo (On the scale)
+We hope you accept our apologies and provide us with your feedback once you order it next time to see if the issue is resolved or not. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'melted_product',
+          category: 'Food & Quality',
+          name: 'Melted Product',
+          extraFields: [
+            { key: 'item', label: 'Product Name', default: 'product', placeholder: 'Product name' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'the full amount', placeholder: 'e.g. 50 EGP' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned you received melted ${p.item || 'item'}.
+Please accept my sincerest apologies for the state of your ${p.item || 'item'}. I assure you that I have escalated this issue to our delivery team to investigate further so that it doesn’t recur. It will be of great assistance in our investigation if you can provide us with a picture of the melted product.
+I have also just refunded you ${p.refundAmount || 'for it'} for it to your Breadfast wallet so you can reorder it at any time, and I will look forward to hearing your feedback.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'hot_cold',
+          category: 'Food & Quality',
+          name: 'Hot / Cold issue',
+          extraFields: [
+            { key: 'tempReceived', label: 'Received as', default: 'cold', placeholder: 'cold / hot' },
+            { key: 'tempExpected', label: 'Expected as', default: 'Hot', placeholder: 'Hot / Cold' },
+            { key: 'item', label: 'Item Name', default: 'item', placeholder: 'Product name' },
+            { key: 'refundPercent', label: 'Refund %', default: '50%', placeholder: 'e.g. 50%' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'XX EGP', placeholder: 'Amount' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned you received a ${p.tempReceived || 'cold'} ${p.item || 'item'}.
+I do apologize immensely for your order not being delivered ${p.tempExpected || 'Hot'}. I assure you that I have escalated this issue to our delivery team for further investigation and immediate action to prevent it from recurring.
+Also, I’ve just refunded you ${p.refundPercent || '50%'} of the ${p.item || 'item'}, which is ${p.refundAmount || 'XX'}.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'production_date_preference',
+          category: 'Food & Quality',
+          name: 'Production date preference',
+          extraFields: [
+            { key: 'item', label: 'Product Name', default: 'product', placeholder: 'Product name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you submitted recently for order #${p.orderNumber}, since you mentioned that ${p.item || 'product'} is an old production/ packing date.
+I do apologize immensely that the production/ packing date doesn’t meet your preference. Allow me to clarify that the restaurant sends the latest date we have available. Regardless, I assure you that I have escalated your feedback to our quality team to take into consideration, if possible.
+It will be of great assistance in our investigation if you can provide us with a picture of the product along with its packing/ production date.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+
+        // 3. Packaging & Items
+        {
+          id: 'missing_item',
+          category: 'Packaging & Items',
+          name: 'Missing item',
+          extraFields: [
+            { key: 'item', label: 'Missing Item', default: 'item', placeholder: 'Item name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that you paid for ${p.item || 'an item'}, but it is still missing.
+Please accept my sincerest apologies that your order wasn’t delivered in full. I assure you that I have escalated this issue to our Packaging team to investigate further so that it doesn’t recur.
+I have added the amount for your missing ${p.item || 'item'}. Also, as a small token of apology, please accept our humble refund for your delivery fees, and feel free to use the balance on any next order by making sure the “use my balance” button is activated on the checkout page. You can always check your updated balance by clicking on the “pay” button.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'missing_wrong_addon',
+          category: 'Packaging & Items',
+          name: 'Missing add-on / Wrong add-on',
+          extraFields: [
+            { key: 'item', label: 'Add-on Name', default: 'extra item', placeholder: 'e.g. sauce, cheese' },
+            { key: 'missingOrWrong', label: 'Status', default: 'missing', placeholder: 'missing / wrong' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'XX EGP', placeholder: 'e.g. 20 EGP' },
+            { key: 'refundDetails', label: 'Refund Details', default: 'XX', placeholder: 'e.g. 20 EGP' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that you paid for extra ${p.item || 'item'}, but it's ${p.missingOrWrong || 'missing'}.
+Please accept my sincerest apologies that your order wasn’t delivered in full. I assure you that I have escalated this issue to our quality and packaging team to investigate further so that it doesn’t recur.
+Also, I've just refunded you the extra amount of ${p.refundAmount || 'XX'}, which is ${p.refundDetails || p.refundAmount || 'XX'}.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'wrong_item',
+          category: 'Packaging & Items',
+          name: 'Wrong item / Order',
+          extraFields: [
+            { key: 'item', label: 'Wrong Item', default: 'the wrong product', placeholder: 'Item name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned you received the wrong products.
+Please accept my sincerest apologies for not delivering the correct products. I assure you that I have escalated this issue to our packing & delivery team to investigate further so that it doesn’t recur. It will be of great assistance in our investigation if you can provide us with a picture of the wrong products/ order you have received.
+Also, I have just refunded you for ${p.item || 'the product'}. Please make sure you refresh the app and click on the “Pay” button to view your updated balance.
+Please feel free to get back to us via this email or via in-app chat.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'spilled_damaged_unsealed',
+          category: 'Packaging & Items',
+          name: 'Spilled / Damaged / Unsealed item',
+          extraFields: [
+            { key: 'damageState', label: 'Damage State', default: 'damaged', placeholder: 'smashed / punctured / broken / Spilled / Unsealed' },
+            { key: 'item', label: 'Item Name', default: 'product', placeholder: 'Product name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you submitted recently for order #${p.orderNumber}, as you mentioned you received a ${p.damageState || 'damaged'} ${p.item || 'product'}.
+Please accept my sincerest apologies for the state of your ${p.item || 'product'}. I assure you that I have escalated this issue to our delivery team to investigate further so that it doesn’t recur. It will be of great assistance in our investigation if you can provide us with a picture of the product. Also, I have just refunded you for ${p.item || 'it'}. Please make sure you refresh the app and click on the “Pay” button to view your updated balance.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us via this email or via in-app chat.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'missing_cutlery',
+          category: 'Packaging & Items',
+          name: 'Missing cutlery',
+          extraFields: [
+            { key: 'item', label: 'Item Name', default: 'order', placeholder: 'e.g. order' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that you received the ${p.item || 'order'} without cutlery.
+Please accept my sincerest apologies that your order wasn’t delivered in full. I assure you that I have escalated this issue to our Packaging team to investigate further so that it doesn’t recur.
+Also, as an apology, I've just refunded you 50 EGP of the ${p.item || 'order'} amount.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'extra_item',
+          category: 'Packaging & Items',
+          name: 'Extra item (Gift)',
+          extraFields: [
+            { key: 'item', label: 'Extra Item', default: 'item', placeholder: 'Extra item name' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that you received Extra ${p.item || 'item'} with your order.
+Please accept my sincerest apologies that your order was delivered with an extra item. Please keep it as a gift from breadfast side.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'dirty_packaging',
+          category: 'Packaging & Items',
+          name: 'Dirty Packaging',
+          extraFields: [
+            { key: 'item', label: 'Refund for', default: 'the packaging', placeholder: 'item or packaging' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, as you mentioned that the packaging of your order was Dirty.
+Please accept my sincerest apologies for the state of your order. I assure you that I have escalated this issue to our packaging team to investigate further so that it doesn’t recur. It will be of great assistance in our investigation if you can provide us with a picture of the product. Also, I have just refunded you for ${p.item || 'it'}. Please make sure you refresh the app and click on the “Pay” button to view your updated balance.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us via this email or via in-app chat.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'irrelevant_item_same_bag',
+          category: 'Packaging & Items',
+          name: 'Irrelevant item in same bag',
+          extraFields: [
+            { key: 'irrelevantItem', label: 'Item 1', default: 'items', placeholder: 'e.g. detergents' },
+            { key: 'item', label: 'Item 2 (Food)', default: 'food items', placeholder: 'e.g. bread' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'the extra amount', placeholder: 'e.g. 50 EGP' },
+            { key: 'refundDetails', label: 'Refund Details', default: 'XX', placeholder: 'Details' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you received ${p.irrelevantItem || 'items'} with the ${p.item || 'items'} in the same bag.
+Please accept my sincerest apologies that your order was delivered in the same bag. I assure you that I have escalated this issue to our packaging team to investigate further so that it doesn’t recur. Also, could you please provide us with a photo of the packaging?
+Also, I've just refunded you the extra amount of ${p.refundAmount || 'XX'}, which is ${p.refundDetails || p.refundAmount || 'XX'}.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'coffee_packaging_negative',
+          category: 'Packaging & Items',
+          name: 'Negative feedback for new coffee packaging',
+          extraFields: [
+            { key: 'item', label: 'Item Name', default: 'coffee', placeholder: 'coffee' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you don't like our new coffee packaging.
+Please accept my sincerest apologies for the packaging of your ${p.item || 'coffee'}. I assure you that I have escalated this to our packaging team, but I would like to inform you that we are using new packaging to avoid any spillage issues.
+We hope you accept our apologies and provide us with your feedback once you order next time to see if the issue is resolved or not. Please feel free to get back to us.
+We’re all more than eager to assist.
+Regards,
+Breadfast Team`
+        },
+        {
+          id: 'packaging_no_comment',
+          category: 'Packaging & Items',
+          name: 'Packaging complaint without comment',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned there is something wrong with the packaging.
+I do apologize for any issue you have faced with your order packaging. Would you please clarify more details in this regard so I can help out?
+Awaiting your reply.
+Regards,
+Breadfast Team.`
+        },
+
+        // 4. Delivery & Driver
+        {
+          id: 'order_late',
+          category: 'Delivery & Driver',
+          name: 'Order is late (Breadfast load)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, as it hasn’t been delivered promptly.
+Please accept my sincerest apologies for the delay in delivering your order. Please allow me to clarify that we have experienced a huge load of orders, which has impacted our delivery time and has led to your order not being delivered on time. I assure you that I have escalated this delay to our delivery team to investigate further so that it doesn’t recur.
+As a small token of apology, please accept our humble refund for your delivery fees, and feel free to use the balance on any future order by making sure the “use my balance” button is activated on the checkout page. You can always check your updated balance by clicking on the “pay” button.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'late_dbr',
+          category: 'Delivery & Driver',
+          name: 'Late DBR (Restaurant load)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, as it hasn’t been delivered promptly.
+Please accept my sincerest apologies for the delay in delivering your order. Please allow me to clarify that the restaurant experienced a huge load of orders, which has impacted to the delivery time and has led to your order not being delivered on time. I assure you that I have escalated this delay to the restaurant delivery team to investigate further so that it doesn’t recur.
+As a small token of apology, please accept our humble refund for your delivery fees, and feel free to use the balance on any future order by making sure the “use my balance” button is activated on the checkout page. You can always check your updated balance by clicking on the “pay” button.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'marked_delivered',
+          category: 'Delivery & Driver',
+          name: 'Order marked as delivered early',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I have tried reaching you regarding your rating for order #${p.orderNumber} since you mentioned our delivery associate marked it as completed before it was, but I haven’t been able to reach you.
+Please accept my sincerest apologies for the confusion caused by the delivery associate. I assure you that I have escalated this inaccurate status to our delivery associate’s direct manager to investigate further so that it doesn’t recur.
+As a small token of apology, please accept our humble refund for your delivery fees so you can have the next one free of delivery charge. Please make sure the “use my balance” button is activated on the checkout page will be added within 24 hours. You can always check your updated balance by clicking on the “pay” button.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us via this email if you’d still like to receive a call.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'completed_not_delivered',
+          category: 'Delivery & Driver',
+          name: 'Completed but not delivered',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I have tried reaching you regarding your rating for order #${p.orderNumber} since you mentioned our delivery associate marked it as completed before it was, but I’m not able to reach you.
+Please accept my sincerest apologies for the confusion caused by the delivery associate. I assure you that I have escalated this inaccurate status to our delivery associate’s direct manager to investigate further so that it doesn’t recur.
+As a small token of apology, please accept our humble refund for your delivery fees so you can have the next one free of delivery charges by making sure the “use my balance” button is activated on the checkout page. You can always check your updated balance by clicking on the “pay” button. Also, could you please inform us if you received your order or not?
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us via this email if you’d still like to receive a call.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'inappropriate_attitude',
+          category: 'Delivery & Driver',
+          name: 'Inappropriate Attitude (Delivery)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned there is an issue with our delivery associate’s attitude.
+Please accept my sincerest apologies for the misconduct caused by the delivery associate. I assure you that I have escalated this issue to our delivery associate’s direct manager to investigate further so that it doesn’t recur.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us here or via the in-app chat.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'delivery_no_comment',
+          category: 'Delivery & Driver',
+          name: 'Delivery issue without comment',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned there is an issue with our delivery associate.
+I do apologize for any trouble our delivery associate has caused you. Would you please provide more details in this regard so I can help out?
+Awaiting your reply.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'unnecessarily_contacting',
+          category: 'Delivery & Driver',
+          name: 'Unnecessarily contacting customer',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you received many calls from our delivery man.
+Please accept my sincerest apologies for any inconvenience. I assure you that I have escalated this issue to our delivery associate’s direct manager to investigate further so that it doesn’t recur.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+
+        // 5. Payment & Pricing
+        {
+          id: 'wrong_collection',
+          category: 'Payment & Pricing',
+          name: 'Wrong Collection (Change to wallet)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you have paid the order full amount, but the change hasn’t been added to your Breadfast wallet.
+Please accept my sincerest apologies that you haven’t received your change yet. I assure you that I have escalated this issue to our delivery associate’s direct manager to investigate further so that it doesn’t recur. I have just refunded you for the remaining change, too. You can always check your updated balance by clicking on the “pay” button.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'no_change',
+          category: 'Payment & Pricing',
+          name: 'No change with delivery',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that our delivery didnt have the change.
+Please accept my sincerest apologies for this case and I assure you that I have escalated this issue to our delivery associate’s direct manager to investigate further so that it doesn’t recur.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'expensive_breadfast',
+          category: 'Payment & Pricing',
+          name: 'Expensive Prices (Breadfast)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you submitted recently for order #${p.orderNumber}, since you mentioned some products were pricey.
+I do apologize immensely that our fresh produce isn’t a match for the quality you have received. Our main goal is to deliver luxurious service that combines both high-quality products and affordable prices. To ensure this happens in the best way, we tend to be picky with our suppliers, especially with Ready Food produce.
+To help lighten the load, we often offer promo codes that are shared by SMS, notifications, on social media, in email, or inside the app, so please keep up with us to benefit from our latest offers.
+I also assure you that I will share your feedback with our products team to take into consideration.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'expensive_restaurant',
+          category: 'Payment & Pricing',
+          name: 'Expensive Prices (Restaurant)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you submitted recently for order #${p.orderNumber}, since you mentioned some products were pricey.
+I would like to inform you that it's related to the restaurant side, as Breadfast is responsible for delivery only.
+To help lighten the load, we often offer promo codes that are shared via SMS, notifications, on social media, in email, or inside the app, so please keep up with us to benefit from our latest offers.
+I also assure you that I will share your feedback with our product team to take into consideration.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'price_mismatch_app_restaurant',
+          category: 'Payment & Pricing',
+          name: 'Price on app doesn’t match menu',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned some product prices are different than the price on the restaurant menu.
+I would like to inform you that it's related to the restaurant side, as Breadfast is responsible for delivery only.
+To help lighten the load, we often offer promo codes that are shared via SMS, notifications, on social media, in email, or inside the app, so please keep up with us to benefit from our latest offers.
+I also assure you that I will share your feedback with our product team to take into consideration.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'item_mismatch_picture',
+          category: 'Payment & Pricing',
+          name: 'Item // Order doesn’t match picture',
+          extraFields: [
+            { key: 'item', label: 'Item Name', default: 'product', placeholder: 'Product name' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'the delivery fee', placeholder: 'Delivery fee or amount' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that the ${p.item || 'product'} was not like the picture on the app.
+Please accept my sincerest apologies that your order wasn’t as shown in the app. I assure you that I have escalated this issue to the restaurant team to investigate further so that it doesn’t recur. It would be of great assistance in our investigation if you could provide us with a picture of the product.
+Also, as an apology, I've just refunded you with the delivery fee to your wallet, which is ${p.refundAmount || 'the delivery fee'}
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'incorrect_product_data',
+          category: 'Payment & Pricing',
+          name: 'Incorrect product Data',
+          extraFields: [
+            { key: 'item', label: 'Item Name', default: 'product', placeholder: 'Product name' },
+            { key: 'missingPart', label: 'Delivered without', default: 'description details', placeholder: 'What was missing' },
+            { key: 'refundPercent', label: 'Refund %', default: 'XX%', placeholder: 'e.g. 50%' },
+            { key: 'refundAmount', label: 'Refund Amount', default: 'XX EGP', placeholder: 'Amount' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you recently submitted for order #${p.orderNumber}. You mentioned that the ${p.item || 'product'} was delivered without ${p.missingPart || 'item'}.
+Please accept my sincerest apologies that your order wasn’t delivered in full. I assure you that I have escalated this issue to our Quality team to investigate further so that it doesn’t recur. I have added ${p.refundPercent || 'XX%'} of the ${p.item || 'product'} amount, which is ${p.refundAmount || 'XX'}.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time.
+Regards,
+Breadfast Team.`
+        },
+
+        // 6. Feedback & Replies
+        {
+          id: 'feedback_general',
+          category: 'Feedback & Replies',
+          name: 'For Feedback cases (Reported to restaurant)',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}.
+I would like to inform you that your feedback has been reported to the restaurant to work on it.
+We hope you accept our apologies and provide us with your feedback once you order next time to see if the issue is resolved or not. Please feel free to get back to us.
+We’re all more than eager to assist.
+Regards,
+Breadfast Team`
+        },
+        {
+          id: 'special_comment_not_done',
+          category: 'Feedback & Replies',
+          name: 'Special comment or request not done',
+          extraFields: [
+            { key: 'specialRequest', label: 'Special Request', default: 'special request', placeholder: 'What was requested' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, since you mentioned that you asked for ${p.specialRequest || 'a special request'} but the order was delivered without it.
+Please accept my sincerest apologies for the order being delivered without your comment. We would like to inform you that we can't confirm 100% that your comment will be included. We tried our best to deliver the order as much as we could with your comment.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'rate_without_comment',
+          category: 'Feedback & Replies',
+          name: 'Rate without comment',
+          extraFields: [
+            { key: 'ratingStars', label: 'Stars Given', default: '1 star', placeholder: 'e.g. 1 star / 2 stars' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you in regards to the rating you recently submitted for order #${p.orderNumber}, since you gave it ${p.ratingStars || '1 star'} without mentioning feedback.
+I do apologize for any issues you have faced with your order, dear. Would you please clarify more details in this regard so I can help out?
+Awaiting your reply
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'not_clear_comment',
+          category: 'Feedback & Replies',
+          name: 'Not clear comment',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding the rating you submitted recently for order #${p.orderNumber}, as you mentioned there is something wrong with some products.
+I do apologize for any issues you have faced with your order/ products, dear. Would you please clarify more details in this regard so I can help out?
+Awaiting your reply.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'customer_reply_with_photo',
+          category: 'Feedback & Replies',
+          name: 'Customer replied with photo or details',
+          extraFields: [
+            { key: 'responsibleTeam', label: 'Responsible Team', default: 'quality', placeholder: 'quality / packaging / delivery' },
+            { key: 'refundPercent', label: 'Refund %', default: '50%', placeholder: 'e.g. 50%' },
+            { key: 'item', label: 'Item Name', default: 'item', placeholder: 'Product name' },
+            { key: 'refundAmount', label: 'Refund Amount (EGP)', default: '50', placeholder: 'e.g. 50' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. Thanks for your reply.
+Your complaint has been reported to our ${p.responsibleTeam || 'quality'} team to take all necessary actions.
+Also, as an apology, I've just refunded you ${p.refundPercent || '50%'} of the ${p.item || 'item'} amount, which is ${p.refundAmount || '50'} EGP.
+Once more, we sincerely apologize for any inconvenience we may have caused you, and we are here to assist you at any time.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'customer_reply_without_photo',
+          category: 'Feedback & Replies',
+          name: 'Customer reply without Photo (Request photo)',
+          extraFields: [
+            { key: 'responsibleTeam', label: 'Responsible Team', default: 'quality', placeholder: 'quality / packaging / delivery' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. Thanks for your reply.
+Your complaint has been reported to our ${p.responsibleTeam || 'quality'} team to take all necessary actions.
+Would you please provide us with a photo in this regard so I can help out?
+Awaiting your reply.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'customer_reply_handled_via_chat',
+          category: 'Feedback & Replies',
+          name: 'Customer reply, but case handled via chat',
+          extraFields: [
+            { key: 'responsibleTeam', label: 'Responsible Team', default: 'support', placeholder: 'packaging / quality / delivery' }
+          ],
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. Thanks for your reply.
+Your complaint has been reported to our ${p.responsibleTeam || 'quality'} team to take all necessary actions, and as I see, your complaint has already been handled by our chat team.
+If you need any other help, please reach out to us via chat or CX@breadfast.com.
+We’re all more than eager to assist.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'late_chat_reply',
+          category: 'Feedback & Replies',
+          name: 'Late reply from chatting team',
+          render: (p) => `Good ${p.greeting} ${p.customerName},
+Hope you’re doing well.
+This is ${p.agentName} from Breadfast’s team. I’m contacting you regarding your dissatisfaction with our chat service.
+Please accept my sincerest apologies for the wait you have had to go through while contacting our chat team to answer your query. I understand how important it is to provide timely and efficient customer support, and we deeply regret any inconvenience this may have caused you.
+Your satisfaction is of utmost priority to us, and we genuinely appreciate your patience and understanding during this time. We have taken note of your query and are committed to resolving it as quickly as possible. Our dedicated team is working diligently to ensure that all pending inquiries are addressed promptly and that we provide you with the necessary assistance.
+To help ease the process, we have allocated additional resources to our chat team and have implemented measures to enhance our overall customer support efficiency. We are confident that these steps will reduce response times and improve the quality of our service significantly moving forward.
+Once more, we do apologize greatly for any inconvenience we might have caused you, and we are right here to assist you at any given time. Please feel free to get back to us.
+Regards,
+Breadfast Team.`
+        },
+        {
+          id: 'optional_reply',
+          category: 'Feedback & Replies',
+          name: 'Short reply (No action needed)',
+          render: () => `It’s always my pleasure.
+I will be here for any further assistance.
+Have a good day.`
+        }
+      ];
+
+      // Add CSS styles if not yet injected
+      if (!document.getElementById('bf-email-styles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'bf-email-styles';
+        styleEl.textContent = `
+          @keyframes bfEmailFadeIn {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .bf-email-chip {
+            padding: 5px 12px;
+            background: #334155;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+            display: inline-flex;
+            align-items: center;
+          }
+          .bf-email-chip:hover {
+            background: #475569;
+            color: #ffffff;
+            border-color: #ec4899;
+          }
+          .bf-email-chip.active {
+            background: #ec4899;
+            color: #ffffff;
+            border-color: #f472b6;
+            box-shadow: 0 0 8px rgba(236, 72, 153, 0.4);
+          }
+          .bf-email-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 7px 10px;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 12px;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+          }
+          .bf-email-input:focus {
+            border-color: #ec4899 !important;
+          }
+          .bf-email-action-btn {
+            padding: 9px 20px;
+            background: #ec4899;
+            color: #ffffff;
+            border: 1px solid #db2777;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.15s ease;
+          }
+          .bf-email-action-btn:hover {
+            background: #db2777;
+            transform: translateY(-1px);
+          }
+          .bf-email-action-btn:active {
+            transform: scale(0.97);
+          }
+          .bf-email-secondary-btn {
+            padding: 8px 14px;
+            background: #334155;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .bf-email-secondary-btn:hover {
+            background: #475569;
+            color: #ffffff;
+            border-color: #64748b;
+            transform: translateY(-1px);
+          }
+          .bf-email-secondary-btn:active {
+            transform: scale(0.97);
+          }
+          .bf-email-scrollbar::-webkit-scrollbar {
+            width: 5px;
+          }
+          .bf-email-scrollbar::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+
+      // Calculate Cairo Time & Greeting
+      const getCairoData = () => {
+        try {
+          const cairoStr = new Date().toLocaleString("en-US", { timeZone: "Africa/Cairo" });
+          const d = new Date(cairoStr);
+          const h = d.getHours();
+          const m = d.getMinutes();
+          const ampm = h >= 12 ? 'PM' : 'AM';
+          const h12 = h % 12 || 12;
+          const timeFormatted = `${h12}:${m < 10 ? '0' + m : m} ${ampm}`;
+
+          let greeting = 'evening';
+          if (h >= 5 && h < 12) greeting = 'morning';
+          else if (h >= 12 && h < 17) greeting = 'afternoon';
+
+          return { greeting, timeFormatted };
+        } catch (e) {
+          const h = new Date().getHours();
+          let greeting = 'evening';
+          if (h >= 5 && h < 12) greeting = 'morning';
+          else if (h >= 12 && h < 17) greeting = 'afternoon';
+          return { greeting, timeFormatted: '' };
+        }
+      };
+
+      const cairoData = getCairoData();
+      let activeGreeting = cairoData.greeting;
+
+      // Extract details from current Freshdesk page
+      const custInfo = extractCustomerInfo();
+      let custName = (custInfo && custInfo.name) ? custInfo.name.trim() : '';
+      let orderNo = extractOrderNumber() || '';
+      let agentName = '';
+      try {
+        agentName = localStorage.getItem('bf_agent_name') || '';
+      } catch (e) {}
+
+      // Calculate initial positioning & dimensions
+      const initW = 620;
+      const initH = Math.min(Math.round(window.innerHeight * 0.84), 690);
+      const initRight = 210;
+      const initLeft = Math.max(20, window.innerWidth - initRight - initW);
+      const initTop = Math.max(25, Math.min(55, window.innerHeight - initH - 30));
+
+      // Floating Non-blocking Resizable Modal Window
+      const modal = document.createElement('div');
+      modal.id = 'bf-email-modal';
+      modal.style.cssText = `
+        position: fixed;
+        top: ${initTop}px;
+        left: ${initLeft}px;
+        width: ${initW}px;
+        height: ${initH}px;
+        min-width: 420px;
+        min-height: 380px;
+        max-width: calc(100vw - 30px);
+        max-height: calc(100vh - 30px);
+        background: #1e293b;
+        color: #f8fafc;
+        border-radius: 12px;
+        border: 1px solid #334155;
+        box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        z-index: 2147483640;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        animation: bfEmailFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        resize: both;
+      `;
+
+      // Header
+      const header = document.createElement('div');
+      header.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 11px 16px;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+        cursor: grab;
+        user-select: none;
+        flex-shrink: 0;
+      `;
+
+      const titleWrap = document.createElement('div');
+      titleWrap.style.cssText = 'display:flex; align-items:center; gap:8px;';
+      titleWrap.innerHTML = `
+        <div>
+          <div style="font-weight: 700; font-size: 13px; color: #f8fafc;">Email Templates</div>
+          <div style="font-size: 11px; color: #94a3b8;" id="bf-email-cairo-info">Cairo Time: <span id="bf-email-cairo-time-text" style="color:#ec4899; font-weight:700;">${cairoData.timeFormatted}</span> (Auto: Good <span id="bf-email-auto-greeting">${cairoData.greeting}</span>)</div>
+        </div>
+      `;
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '✕';
+      closeBtn.title = 'Close';
+      closeBtn.style.cssText = `
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+      `;
+      closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#fff'; closeBtn.style.background = '#334155'; });
+      closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#94a3b8'; closeBtn.style.background = 'transparent'; });
+      const closeModal = () => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('mousemove', onResizeMouseMove);
+        window.removeEventListener('mouseup', onResizeMouseUp);
+        window.removeEventListener('keydown', keyHandler);
+        modal.remove();
+      };
+      closeBtn.addEventListener('click', closeModal);
+
+      header.appendChild(titleWrap);
+      header.appendChild(closeBtn);
+      modal.appendChild(header);
+
+      // Body (Scrollable, flexible height)
+      const body = document.createElement('div');
+      body.className = 'bf-email-scrollbar';
+      body.style.cssText = 'padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; flex: 1; min-height: 0;';
+
+      // 1. Controls Row: Customer Name, Order Number, Agent Name
+      const row1 = document.createElement('div');
+      row1.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex-shrink: 0;';
+      row1.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11px; font-weight:600; color:#cbd5e1;">Customer Name:</label>
+          <input type="text" id="bf-email-cust-name" class="bf-email-input" value="${custName.replace(/"/g, '&quot;')}" placeholder="e.g. Ahmed" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11px; font-weight:600; color:#cbd5e1;">Order Number:</label>
+          <input type="text" id="bf-email-order-no" class="bf-email-input" value="${orderNo.replace(/"/g, '&quot;')}" placeholder="e.g. 2809-123456" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11px; font-weight:600; color:#cbd5e1;">Agent Name (YY):</label>
+          <input type="text" id="bf-email-agent-name" class="bf-email-input" value="${agentName.replace(/"/g, '&quot;')}" placeholder="Your Name" />
+        </div>
+      `;
+      body.appendChild(row1);
+
+      // 2. Greeting Selector Row
+      const greetingRow = document.createElement('div');
+      greetingRow.style.cssText = 'display:flex; align-items:center; justify-content:space-between; background:#0f172a; padding:7px 12px; border-radius:8px; border:1px solid #334155; flex-shrink: 0;';
+      greetingRow.innerHTML = `
+        <div style="display:flex; align-items:center; gap:6px;">
+          <span style="font-size:11px; font-weight:700; color:#cbd5e1;">Greeting:</span>
+          <span style="font-size:10px; color:#94a3b8;">(Auto Cairo)</span>
+        </div>
+        <div style="display:flex; gap:6px;" id="bf-email-greeting-chips">
+          <button type="button" class="bf-email-chip ${activeGreeting === 'morning' ? 'active' : ''}" data-val="morning">Morning</button>
+          <button type="button" class="bf-email-chip ${activeGreeting === 'afternoon' ? 'active' : ''}" data-val="afternoon">Afternoon</button>
+          <button type="button" class="bf-email-chip ${activeGreeting === 'evening' ? 'active' : ''}" data-val="evening">Evening</button>
+        </div>
+      `;
+      body.appendChild(greetingRow);
+
+      // 3. Divided Selection: Category + Template Dropdowns & Search
+      const tplRow = document.createElement('div');
+      tplRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 8px; flex-shrink: 0;';
+      tplRow.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <label style="font-size:11px; font-weight:700; color:#cbd5e1;">Category:</label>
+          <select id="bf-email-cat-select" class="bf-email-input" style="cursor:pointer; font-size:12px; font-weight:600; padding:7px 8px;">
+          </select>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <label style="font-size:11px; font-weight:700; color:#cbd5e1;">Template:</label>
+            <input type="text" id="bf-email-search" placeholder="Search..." style="width:110px; padding:3px 6px; font-size:11px; background:#0f172a; border:1px solid #475569; border-radius:4px; color:#fff; outline:none;" />
+          </div>
+          <select id="bf-email-tpl-select" class="bf-email-input" style="cursor:pointer; font-size:12px; font-weight:600; padding:7px 8px;">
+          </select>
+        </div>
+      `;
+      body.appendChild(tplRow);
+
+      // 4. Dynamic Extra Variables Row (Container)
+      const extraFieldsContainer = document.createElement('div');
+      extraFieldsContainer.id = 'bf-email-extra-fields';
+      extraFieldsContainer.style.cssText = 'display:none; flex-wrap:wrap; gap:8px; background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid #334155; flex-shrink: 0;';
+      body.appendChild(extraFieldsContainer);
+
+      // 5. Live Preview Textarea (Flex-grow with window height)
+      const previewGroup = document.createElement('div');
+      previewGroup.style.cssText = 'display:flex; flex-direction:column; gap:4px; flex:1; min-height:140px;';
+      previewGroup.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+          <label style="font-size:11px; font-weight:700; color:#94a3b8;">LIVE EMAIL PREVIEW (EDITABLE):</label>
+          <span style="font-size:10px; color:#64748b;">Direct edits are preserved</span>
+        </div>
+        <textarea id="bf-email-preview" class="bf-email-scrollbar" style="width:100%; height:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:8px; color:#ffffff; font-size:13px; line-height:1.5; outline:none; resize:none; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transition:border-color 0.2s;"></textarea>
+      `;
+      body.appendChild(previewGroup);
+
+      // 6. Action Bar: Reset + Copy Email buttons
+      const actionRow = document.createElement('div');
+      actionRow.style.cssText = 'display:flex; justify-content:space-between; align-items:center; margin-top:2px; flex-shrink:0;';
+      actionRow.innerHTML = `
+        <button type="button" class="bf-email-secondary-btn" id="bf-email-reset-btn" title="Refresh Customer Name & Order Number from current ticket">Reset</button>
+        <button type="button" class="bf-email-action-btn" id="bf-email-copy-btn">Copy Email</button>
+      `;
+      body.appendChild(actionRow);
+
+      modal.appendChild(body);
+
+      // Corner Resizer Handle (bottom-right)
+      const resizerHandle = document.createElement('div');
+      resizerHandle.id = 'bf-email-resizer-handle';
+      resizerHandle.style.cssText = `
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 18px;
+        height: 18px;
+        cursor: nwse-resize;
+        z-index: 100;
+        display: flex;
+        align-items: flex-end;
+        justify-content: flex-end;
+        padding: 3px;
+        box-sizing: border-box;
+      `;
+      resizerHandle.innerHTML = `
+        <svg width="10" height="10" viewBox="0 0 10 10" style="opacity: 0.5; pointer-events: none;">
+          <line x1="8" y1="2" x2="2" y2="8" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
+          <line x1="8" y1="5" x2="5" y2="8" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" />
+        </svg>
+      `;
+      modal.appendChild(resizerHandle);
+
+      document.body.appendChild(modal);
+
+      // DOM Elements
+      const custNameInput = modal.querySelector('#bf-email-cust-name');
+      const orderNoInput = modal.querySelector('#bf-email-order-no');
+      const agentNameInput = modal.querySelector('#bf-email-agent-name');
+      const catSelect = modal.querySelector('#bf-email-cat-select');
+      const searchInput = modal.querySelector('#bf-email-search');
+      const tplSelect = modal.querySelector('#bf-email-tpl-select');
+      const previewText = modal.querySelector('#bf-email-preview');
+      const resetBtn = modal.querySelector('#bf-email-reset-btn');
+      const copyBtn = modal.querySelector('#bf-email-copy-btn');
+      const greetingChips = modal.querySelectorAll('.bf-email-chip');
+
+      // Populate Category Dropdown
+      CATEGORIES.forEach(cat => {
+        const opt = document.createElement('option');
+        opt.value = cat;
+        opt.textContent = cat;
+        catSelect.appendChild(opt);
+      });
+
+      // Populate Template Dropdown based on chosen category and search
+      const populateTemplateDropdown = (catFilter = 'All Categories', searchQuery = '') => {
+        const query = searchQuery.toLowerCase().trim();
+        tplSelect.innerHTML = '';
+
+        const filtered = EMAIL_TEMPLATES.filter(tpl => {
+          const matchCat = (catFilter === 'All Categories') || (tpl.category === catFilter);
+          const matchQuery = !query || tpl.name.toLowerCase().includes(query) || tpl.category.toLowerCase().includes(query);
+          return matchCat && matchQuery;
+        });
+
+        if (filtered.length === 0) {
+          const opt = document.createElement('option');
+          opt.value = '';
+          opt.textContent = 'No matching templates';
+          tplSelect.appendChild(opt);
+          return;
+        }
+
+        // If All Categories, group by category
+        if (catFilter === 'All Categories') {
+          const grouped = {};
+          filtered.forEach(tpl => {
+            if (!grouped[tpl.category]) grouped[tpl.category] = [];
+            grouped[tpl.category].push(tpl);
+          });
+          Object.keys(grouped).forEach(cat => {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = cat;
+            grouped[cat].forEach(t => {
+              const opt = document.createElement('option');
+              opt.value = t.id;
+              opt.textContent = t.name;
+              optgroup.appendChild(opt);
+            });
+            tplSelect.appendChild(optgroup);
+          });
+        } else {
+          // Single category list
+          filtered.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            tplSelect.appendChild(opt);
+          });
+        }
+      };
+
+      // State of extra inputs
+      const extraInputValues = {};
+
+      const renderExtraFields = (tpl) => {
+        extraFieldsContainer.innerHTML = '';
+        if (!tpl || !tpl.extraFields || tpl.extraFields.length === 0) {
+          extraFieldsContainer.style.display = 'none';
+          return;
+        }
+
+        extraFieldsContainer.style.display = 'flex';
+        tpl.extraFields.forEach(fld => {
+          const wrap = document.createElement('div');
+          wrap.style.cssText = 'display:flex; flex-direction:column; gap:3px; flex:1; min-width:120px;';
+
+          const lbl = document.createElement('label');
+          lbl.style.cssText = 'font-size:10px; font-weight:700; color:#cbd5e1;';
+          lbl.textContent = fld.label + ':';
+
+          const inp = document.createElement('input');
+          inp.type = 'text';
+          inp.className = 'bf-email-input';
+          inp.style.padding = '5px 8px';
+          inp.style.fontSize = '11px';
+          inp.placeholder = fld.placeholder || '';
+          inp.value = extraInputValues[fld.key] !== undefined ? extraInputValues[fld.key] : (fld.default || '');
+
+          inp.addEventListener('input', () => {
+            extraInputValues[fld.key] = inp.value;
+            updateEmailPreview();
+          });
+
+          wrap.appendChild(lbl);
+          wrap.appendChild(inp);
+          extraFieldsContainer.appendChild(wrap);
+        });
+      };
+
+      const updateEmailPreview = () => {
+        const selectedId = tplSelect.value;
+        const tpl = EMAIL_TEMPLATES.find(t => t.id === selectedId) || EMAIL_TEMPLATES[0];
+        if (!tpl) {
+          previewText.value = '';
+          return;
+        }
+
+        const params = {
+          greeting: activeGreeting,
+          customerName: custNameInput.value.trim() || 'XX',
+          orderNumber: orderNoInput.value.trim() || 'XXX-XXXXXXX',
+          agentName: agentNameInput.value.trim() || 'YY',
+          ...extraInputValues
+        };
+
+        previewText.value = tpl.render(params);
+      };
+
+      // Category Change Event
+      catSelect.addEventListener('change', () => {
+        populateTemplateDropdown(catSelect.value, searchInput.value);
+        if (tplSelect.options.length > 0) {
+          tplSelect.selectedIndex = 0;
+          tplSelect.dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Search input event
+      searchInput.addEventListener('input', () => {
+        const prevSelected = tplSelect.value;
+        populateTemplateDropdown(catSelect.value, searchInput.value);
+        if (Array.from(tplSelect.options).some(o => o.value === prevSelected)) {
+          tplSelect.value = prevSelected;
+        } else if (tplSelect.options.length > 0) {
+          tplSelect.selectedIndex = 0;
+          tplSelect.dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Template Select change event
+      tplSelect.addEventListener('change', () => {
+        const selectedId = tplSelect.value;
+        const tpl = EMAIL_TEMPLATES.find(t => t.id === selectedId);
+        Object.keys(extraInputValues).forEach(k => delete extraInputValues[k]);
+        if (tpl && tpl.extraFields) {
+          tpl.extraFields.forEach(f => {
+            extraInputValues[f.key] = f.default || '';
+          });
+        }
+        renderExtraFields(tpl);
+        updateEmailPreview();
+      });
+
+      // Greeting Chips
+      greetingChips.forEach(chip => {
+        chip.addEventListener('click', () => {
+          greetingChips.forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          activeGreeting = chip.dataset.val;
+          updateEmailPreview();
+        });
+      });
+
+      // Inputs live change
+      [custNameInput, orderNoInput].forEach(inp => {
+        inp.addEventListener('input', updateEmailPreview);
+      });
+
+      agentNameInput.addEventListener('input', () => {
+        try {
+          localStorage.setItem('bf_agent_name', agentNameInput.value.trim());
+        } catch (e) {}
+        updateEmailPreview();
+      });
+
+      // Reset Button - Refreshes Customer Name & Order Number from current ticket
+      resetBtn.addEventListener('click', () => {
+        const freshCust = extractCustomerInfo();
+        const freshOrder = extractOrderNumber();
+
+        custNameInput.value = (freshCust && freshCust.name) ? freshCust.name.trim() : '';
+        orderNoInput.value = freshOrder || '';
+
+        // Recalculate Cairo Time & Greeting
+        const freshCairo = getCairoData();
+        activeGreeting = freshCairo.greeting;
+        greetingChips.forEach(chip => {
+          chip.classList.toggle('active', chip.dataset.val === activeGreeting);
+        });
+
+        const timeDisplay = modal.querySelector('#bf-email-cairo-time-text');
+        if (timeDisplay) timeDisplay.textContent = freshCairo.timeFormatted;
+        const autoGreetingDisplay = modal.querySelector('#bf-email-auto-greeting');
+        if (autoGreetingDisplay) autoGreetingDisplay.textContent = freshCairo.greeting;
+
+        updateEmailPreview();
+
+        resetBtn.textContent = 'Refreshed!';
+        resetBtn.style.color = '#10b981';
+        resetBtn.style.borderColor = '#10b981';
+        setTimeout(() => {
+          resetBtn.textContent = 'Reset';
+          resetBtn.style.color = '#cbd5e1';
+          resetBtn.style.borderColor = '#475569';
+        }, 1200);
+
+        showToast('Refreshed Customer & Order from current ticket!', 'info');
+      });
+
+      // Copy Button
+      copyBtn.addEventListener('click', () => {
+        const text = previewText.value;
+        if (!text) return;
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = 'Copied!';
+          copyBtn.style.background = '#10b981';
+          copyBtn.style.borderColor = '#10b981';
+          setTimeout(() => {
+            copyBtn.textContent = 'Copy Email';
+            copyBtn.style.background = '#ec4899';
+            copyBtn.style.borderColor = '#db2777';
+          }, 1400);
+        }).catch(() => {});
+      });
+
+      // Close on Escape key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          closeModal();
+        }
+      };
+      window.addEventListener('keydown', keyHandler);
+
+      // Make draggable
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let initialLeft = 0, initialTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = modal.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        modal.style.right = 'auto';
+        modal.style.left = `${initialLeft}px`;
+        modal.style.top = `${initialTop}px`;
+        modal.style.margin = '0';
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      const onMouseMove = (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newX = Math.max(10, Math.min(window.innerWidth - 300, initialLeft + dx));
+        const newY = Math.max(10, Math.min(window.innerHeight - 150, initialTop + dy));
+        modal.style.left = `${newX}px`;
+        modal.style.top = `${newY}px`;
+      };
+
+      const onMouseUp = () => {
+        if (isDragging) {
+          isDragging = false;
+          header.style.cursor = 'grab';
+        }
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+
+      // Make resizable via corner grip
+      let isResizing = false;
+      let resizeStartX = 0, resizeStartY = 0;
+      let startW = 0, startH = 0;
+
+      resizerHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        resizeStartX = e.clientX;
+        resizeStartY = e.clientY;
+        const rect = modal.getBoundingClientRect();
+        startW = rect.width;
+        startH = rect.height;
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      const onResizeMouseMove = (e) => {
+        if (!isResizing) return;
+        const dx = e.clientX - resizeStartX;
+        const dy = e.clientY - resizeStartY;
+        const newW = Math.max(420, Math.min(window.innerWidth - 30, startW + dx));
+        const newH = Math.max(380, Math.min(window.innerHeight - 30, startH + dy));
+        modal.style.width = `${newW}px`;
+        modal.style.height = `${newH}px`;
+      };
+
+      const onResizeMouseUp = () => {
+        if (isResizing) isResizing = false;
+      };
+
+      window.addEventListener('mousemove', onResizeMouseMove);
+      window.addEventListener('mouseup', onResizeMouseUp);
+
+      // Initial trigger
+      populateTemplateDropdown('All Categories');
+      tplSelect.dispatchEvent(new Event('change'));
+    }
+
     rmsBtn.addEventListener('click', () => {
       const orderNumber = extractOrderNumber();
       if (!orderNumber) {
@@ -1813,6 +3304,33 @@
       }
       const rmsUrl = `https://food-rms.breadfast.com/orders/list?page=1&limit=10&sortBy=placedAt&sortOrder=desc&search=${encodeURIComponent(orderNumber)}&searchBy=orderNumber&bf_autoclick=1`;
       window.open(rmsUrl, '_blank', 'noopener,noreferrer');
+    });
+
+    // =========================================================================
+    // SMS Dashboard Button
+    // =========================================================================
+    smsBtn.addEventListener('click', () => {
+      const customerId = extractCustomerId();
+      const orderNo = extractOrderNumber();
+      let cleanOrderId = '';
+      if (orderNo) {
+        cleanOrderId = orderNo.includes('-') ? (orderNo.split('-')[1] || orderNo) : orderNo;
+        cleanOrderId = cleanOrderId.replace(/^[^\d]+/, '').trim();
+      }
+
+      const smsUrl = `https://www.breadfast.com/dashboard/sms/create?orderId=${encodeURIComponent(cleanOrderId)}&&customerId=${encodeURIComponent(customerId || '')}`;
+
+      if (customerId && cleanOrderId) {
+        showToast(`Opening SMS Dashboard (Order #${cleanOrderId} - Customer #${customerId})...`, 'info');
+      } else if (customerId) {
+        showToast(`Opening SMS Dashboard (Customer #${customerId})...`, 'info');
+      } else if (cleanOrderId) {
+        showToast(`Customer ID not found, opening SMS with Order #${cleanOrderId}...`, 'info');
+      } else {
+        showToast('Opening SMS Dashboard...', 'info');
+      }
+
+      window.open(smsUrl, '_blank', 'noopener,noreferrer');
     });
 
     // =========================================================================
@@ -2103,6 +3621,9 @@
       const allSubmenus = treeWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
       allSubmenus.forEach(sm => sm.style.display = 'none');
       Object.keys(activeSubmenusByDepth).forEach(k => delete activeSubmenusByDepth[k]);
+      treeWrapper.querySelectorAll('.bf-tree-item').forEach(el => {
+        el.style.backgroundColor = 'transparent';
+      });
     };
 
     const closeSubmenusFromDepth = (depth) => {
@@ -2112,6 +3633,11 @@
             activeSubmenusByDepth[d].style.display = 'none';
           }
           delete activeSubmenusByDepth[d];
+        }
+      });
+      treeWrapper.querySelectorAll('.bf-tree-item').forEach(el => {
+        if (el._childMenu && el._childMenu.style.display === 'none') {
+          el.style.backgroundColor = 'transparent';
         }
       });
     };
@@ -2162,11 +3688,6 @@
       listContainer.style.gap = '2px';
       menu.appendChild(listContainer);
 
-      // Close open submenus if this parent list is scrolled
-      menu.addEventListener('scroll', () => {
-        closeSubmenusFromDepth(depth + 1);
-      });
-
       items.forEach(item => {
         if (item.type === 'divider') {
           const div = document.createElement('div');
@@ -2208,9 +3729,8 @@
 
           const currentPath = [...path, item.label];
           const childMenu = buildSubmenu(item.children, false, currentPath, depth + 1);
+          itemEl._childMenu = childMenu;
           treeWrapper.appendChild(childMenu); // Append to top-level treeWrapper so it's NEVER clipped!
-
-          let closeTimer = null;
 
           const positionAndShowChildMenu = () => {
             closeSubmenusFromDepth(depth + 1);
@@ -2253,48 +3773,38 @@
             childMenu.style.top = `${topPos}px`;
           };
 
-          childMenu.addEventListener('mouseenter', () => {
-            if (closeTimer) clearTimeout(closeTimer);
-          });
-
-          childMenu.addEventListener('mouseleave', () => {
-            closeTimer = setTimeout(() => {
-              childMenu.style.display = 'none';
-              if (activeSubmenusByDepth[depth + 1] === childMenu) {
-                delete activeSubmenusByDepth[depth + 1];
-              }
-            }, 120);
-          });
-
+          // Hover ONLY highlights the item; it NEVER opens or closes menus automatically
           itemEl.addEventListener('mouseenter', () => {
-            if (closeTimer) clearTimeout(closeTimer);
-            itemEl.style.backgroundColor = '#334155';
-            positionAndShowChildMenu();
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = '#334155';
+            }
           });
 
           itemEl.addEventListener('mouseleave', () => {
-            itemEl.style.backgroundColor = 'transparent';
-            closeTimer = setTimeout(() => {
-              childMenu.style.display = 'none';
-              if (activeSubmenusByDepth[depth + 1] === childMenu) {
-                delete activeSubmenusByDepth[depth + 1];
-              }
-            }, 120);
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = 'transparent';
+            }
           });
 
+          // Click opens and locks the submenu open until another click occurs
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
             if (childMenu.style.display === 'block') {
-              childMenu.style.display = 'none';
-              delete activeSubmenusByDepth[depth + 1];
+              closeSubmenusFromDepth(depth + 1);
+              itemEl.style.backgroundColor = 'transparent';
             } else {
+              listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
+                if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
+                  sib.style.backgroundColor = 'transparent';
+                }
+              });
+              itemEl.style.backgroundColor = '#0284c7';
               positionAndShowChildMenu();
             }
           });
         } else {
           // Leaf item
           itemEl.addEventListener('mouseenter', () => {
-            closeSubmenusFromDepth(depth + 1);
             itemEl.style.backgroundColor = '#334155';
           });
           itemEl.addEventListener('mouseleave', () => {
@@ -2343,6 +3853,7 @@
       if (isOpen) {
         closeAllTreeMenus();
       } else {
+        closeAllTreeMenus();
         rootMenu.style.display = 'block';
       }
     });
@@ -2352,10 +3863,6 @@
         closeAllTreeMenus();
       }
     });
-
-    window.addEventListener('scroll', () => {
-      closeAllTreeMenus();
-    }, { passive: true });
 
     updateTreeMenuPosition = (side) => {
       if (!rootMenu) return;
@@ -2383,6 +3890,8 @@
     container.appendChild(chatBtn);
     container.appendChild(delayBtn);
     container.appendChild(calcBtn);
+    container.appendChild(emailBtn);
+    container.appendChild(smsBtn);
     document.body.appendChild(container);
   }
 

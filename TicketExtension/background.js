@@ -23,6 +23,11 @@ function formatPhoneForKairos(rawPhone) {
     cleaned = cleaned.substring(2);
   }
 
+  // Handle +20 010... (extra 0 after 20 -> 2001[0125] -> 201[0125])
+  if (cleaned.startsWith('2001') && cleaned.length === 13) {
+    cleaned = '20' + cleaned.substring(3);
+  }
+
   // Egyptian mobile: 010, 011, 012, 015 (11 digits) -> prefix with 2 -> 201x xxxxxxxx (12 digits)
   if (cleaned.startsWith('01') && cleaned.length === 11) {
     cleaned = '2' + cleaned;
@@ -35,10 +40,18 @@ function formatPhoneForKairos(rawPhone) {
     return cleaned;
   }
 
+  // Egyptian landlines (10 digits starting with 02 or 03 -> 202..., 203...)
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    cleaned = '2' + cleaned;
+  }
+  if (/^20[2-9]\d{7,8}$/.test(cleaned)) {
+    return cleaned;
+  }
+
   // International phone: 10 to 15 digits
   if (cleaned.length >= 10 && cleaned.length <= 15) {
-    // Strictly reject order numbers (13 digits starting with 2[0-9]{3} like 2809100214792)
-    if (cleaned.length === 13 && /^(?:2\d{3})/.test(cleaned)) {
+    // Strictly reject order numbers (13 digits starting with 2[1-9] like 2809100214792)
+    if (cleaned.length === 13 && /^2[1-9]/.test(cleaned)) {
       return null;
     }
     return cleaned;
@@ -50,26 +63,54 @@ function formatPhoneForKairos(rawPhone) {
 function extractPhoneFromHtml(html) {
   if (!html) return null;
 
-  // 1. Primary: Search strictly inside editAddress container (WooCommerce Billing Address)
-  const editAddrMatch = html.match(/id=["']editAddress["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i) || 
-                        html.match(/class=["'][^"']*order_data_column[^"']*["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i);
+  // 1. Direct check for tel: links
+  const telMatch = html.match(/href=["']tel:([+\d\s\-()]{8,25})["']/i);
+  if (telMatch && telMatch[1]) {
+    const phone = formatPhoneForKairos(telMatch[1]);
+    if (phone) return phone;
+  }
+
+  // 2. Billing phone input (WooCommerce billing phone input with attributes in any order)
+  const inputMatch = html.match(/<input[^>]+(?:name|id)=["']_billing_phone["'][^>]*value=["']([^"']+)["']/i) ||
+                     html.match(/<input[^>]+value=["']([^"']+)["'][^>]*?(?:name|id)=["']_billing_phone["']/i);
+  if (inputMatch && inputMatch[1]) {
+    const phone = formatPhoneForKairos(inputMatch[1]);
+    if (phone) return phone;
+  }
+
+  // 3. Search inside editAddress or order_data_column or billing container
+  const editAddrMatch = html.match(/id=["']editAddress["'][\s\S]{0,3500}/i) || 
+                        html.match(/class=["'][^"']*order_data_column[^"']*["'][\s\S]{0,3500}/i) ||
+                        html.match(/class=["'][^"']*billing[^"']*["'][\s\S]{0,3500}/i);
   if (editAddrMatch) {
     const block = editAddrMatch[0];
-    const mP = block.match(/Phone:?(?:<[^>]+>|["'\s\n\r]|&nbsp;)*([+\d\s\-()]{8,20})/i) ||
-               block.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
-    if (mP && mP[1]) {
-      const phone = formatPhoneForKairos(mP[1]);
+
+    // Check tel link inside block
+    const bTel = block.match(/href=["']tel:([+\d\s\-()]{8,25})["']/i);
+    if (bTel && bTel[1]) {
+      const p = formatPhoneForKairos(bTel[1]);
+      if (p) return p;
+    }
+
+    // Check Phone: label followed by phone number
+    const mP = block.match(/(?:Phone|Mobile|الهاتف|موبايل):?(?:<[^>]+>|["'\s\n\r]|&nbsp;)*([+\d\s\-()]{8,25})/i);
+    if (mP) {
+      const phone = formatPhoneForKairos(mP[1] || mP[0]);
+      if (phone) return phone;
+    }
+
+    // Check Egyptian phone inside billing block
+    const mEg = block.match(/(?:(?:\+?20|0020)[\s\-()]*)?0?1[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
+    if (mEg) {
+      const phone = formatPhoneForKairos(mEg[0]);
       if (phone) return phone;
     }
   }
 
-  // 2. Billing phone input or meta field
-  const p3 = /(?:name|id)=["']_billing_phone["']\s+value=["']([^"']+)["']/i;
-  const p3b = /value=["']([^"']+)["']\s+(?:name|id)=["']_billing_phone["']/i;
-  const p3c = /"(?:billing_phone)":\s*["']([^"']+)["']/i;
-  const m3 = html.match(p3) || html.match(p3b) || html.match(p3c);
-  if (m3 && m3[1]) {
-    const phone = formatPhoneForKairos(m3[1]);
+  // 4. JSON data
+  const jsonMatch = html.match(/"(?:billing_phone|phone|customer_phone|mobile)":\s*["']([^"']+)["']/i);
+  if (jsonMatch && jsonMatch[1]) {
+    const phone = formatPhoneForKairos(jsonMatch[1]);
     if (phone) return phone;
   }
 
@@ -77,9 +118,26 @@ function extractPhoneFromHtml(html) {
 }
 
 function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
+  let isDone = false;
+  let pollIv = null;
+  let timeoutId = null;
+
+  const safeSend = (data) => {
+    if (isDone) return;
+    isDone = true;
+    if (pollIv) clearInterval(pollIv);
+    if (timeoutId) clearTimeout(timeoutId);
+
+    try {
+      sendResponse(data);
+    } catch (e) {
+      console.warn('[BF Extension] sendResponse failed:', e);
+    }
+  };
+
   chrome.tabs.create({ url: orderUrl, active: false }, (newTab) => {
     if (chrome.runtime.lastError || !newTab) {
-      sendResponse({
+      safeSend({
         success: false,
         error: 'Failed to open background tab: ' + (chrome.runtime.lastError?.message || '')
       });
@@ -87,15 +145,8 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
     }
 
     const tabId = newTab.id;
-    let isDone = false;
 
     const finishAndCloseTab = (data) => {
-      if (isDone) return;
-      isDone = true;
-
-      clearInterval(pollIv);
-      clearTimeout(timeoutId);
-
       try {
         chrome.tabs.remove(tabId, () => {
           if (chrome.runtime.lastError) { /* ignore */ }
@@ -103,7 +154,7 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
       } catch (e) {}
 
       if (!data || !data.success) {
-        sendResponse({
+        safeSend({
           success: false,
           error: data?.error || 'Failed to extract customer phone number from order page.'
         });
@@ -112,7 +163,7 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
 
       const phone = formatPhoneForKairos(data.phone);
       if (!phone || phone.length < 8) {
-        sendResponse({
+        safeSend({
           success: false,
           error: 'Phone number found is invalid: ' + data.phone
         });
@@ -123,65 +174,81 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
       const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(phone)}`;
       chrome.tabs.create({ url: kairosUrl, active: true });
 
-      sendResponse({
+      safeSend({
         success: true,
         phone: phone
       });
     };
 
-    const timeoutId = setTimeout(() => {
+    // Overall safety timeout of 3.8 seconds for the background tab
+    timeoutId = setTimeout(() => {
       finishAndCloseTab({ success: false, error: 'Timed out waiting for order page.' });
-    }, 7000);
+    }, 3800);
 
     const extractScript = () => {
       if (document.querySelector('form#loginform') || window.location.pathname.includes('wp-login.php')) {
         return { error: 'Not logged into Breadfast Admin. Please log into Breadfast first.' };
       }
 
-      // Strictly check WooCommerce order billing address - never search global headers or footers
-      const containers = [
-        document.querySelector('#editAddress'),
-        document.querySelector('.order_data_column')
-      ].filter(Boolean);
-
-      for (const container of containers) {
-        const tags = Array.from(container.querySelectorAll('b, strong, span, p, label'));
-        for (const el of tags) {
-          const text = (el.textContent || '').trim();
-          if (/^phone:?/i.test(text)) {
-            const parentText = el.parentElement ? el.parentElement.textContent : '';
-            const match = parentText.match(/phone:?\s*([+\d\s\-()]{8,})/i);
-            if (match) {
-              const p = formatPhoneForKairos(match[1]);
-              if (p) return { success: true, phone: p };
-            }
-
-            let next = el.nextSibling;
-            while (next) {
-              const sibText = (next.textContent || '').trim();
-              const sibMatch = sibText.match(/([+\d\s\-()]{8,})/);
-              if (sibMatch) {
-                const p = formatPhoneForKairos(sibMatch[1]);
-                if (p) return { success: true, phone: p };
-              }
-              next = next.nextSibling;
-            }
-          }
+      const cleanPhone = (raw) => {
+        if (!raw) return null;
+        let c = String(raw).replace(/[^\d]/g, '');
+        if (c.startsWith('0020')) c = c.substring(2);
+        if (c.startsWith('2001') && c.length === 13) c = '20' + c.substring(3);
+        if (c.startsWith('01') && c.length === 11) c = '2' + c;
+        else if (/^1[0125]\d{8}$/.test(c)) c = '20' + c;
+        if (/^201[0125]\d{8}$/.test(c)) return c;
+        if (c.length >= 10 && c.length <= 15) {
+          if (c.length === 13 && /^2[1-9]/.test(c)) return null;
+          return c;
         }
+        return null;
+      };
 
-        const phoneInput = container.querySelector('input[name*="billing_phone" i], input#_billing_phone');
-        if (phoneInput && phoneInput.value) {
-          const p = formatPhoneForKairos(phoneInput.value);
+      // 1. Check all tel: links
+      const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'));
+      for (const a of telLinks) {
+        const p = cleanPhone(a.getAttribute('href') || a.textContent);
+        if (p) return { success: true, phone: p };
+      }
+
+      // 2. Check billing phone inputs / meta fields
+      const inputs = Array.from(document.querySelectorAll('input[name*="billing_phone" i], input#_billing_phone, input[name*="phone" i]'));
+      for (const inp of inputs) {
+        if (inp.value) {
+          const p = cleanPhone(inp.value);
           if (p) return { success: true, phone: p };
         }
+      }
+
+      // 3. Search inside billing containers and order columns
+      const containers = Array.from(document.querySelectorAll(
+        '#editAddress, .order_data_column, .billing-address, [class*="billing" i], [class*="customer" i], .ant-descriptions, table.order_details'
+      ));
+
+      for (const container of containers) {
+        const text = container.textContent || '';
+        const m = text.match(/(?:phone|mobile|هاتف|موبايل):?\s*([+\d\s\-()]{8,25})/i) ||
+                  text.match(/(?:(?:\+?20|0020)[\s\-()]*)?0?1[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
+        if (m) {
+          const p = cleanPhone(m[1] || m[0]);
+          if (p) return { success: true, phone: p };
+        }
+      }
+
+      // 4. Fallback search across body for Egyptian mobile numbers
+      const bodyText = document.body ? (document.body.innerText || '') : '';
+      const bodyM = bodyText.match(/(?:phone|mobile):?\s*([+\d\s\-()]{8,25})/i);
+      if (bodyM) {
+        const p = cleanPhone(bodyM[1]);
+        if (p) return { success: true, phone: p };
       }
 
       return null;
     };
 
-    // Fast active polling every 100ms - does NOT wait for 'complete' status!
     let attempts = 0;
-    const pollIv = setInterval(() => {
+    pollIv = setInterval(() => {
       if (isDone) {
         clearInterval(pollIv);
         return;
@@ -192,7 +259,7 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
         target: { tabId },
         func: extractScript
       }, (results) => {
-        if (chrome.runtime.lastError) {
+        if (chrome.runtime.lastError || isDone) {
           return;
         }
         if (results && results[0] && results[0].result) {
@@ -205,11 +272,11 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
         }
       });
 
-      if (attempts > 35) {
+      if (attempts >= 25) { // 25 * 120ms = 3.0s
         clearInterval(pollIv);
         finishAndCloseTab({ success: false, error: 'Could not find customer Phone number on order page.' });
       }
-    }, 100);
+    }, 120);
   });
 }
 
@@ -244,10 +311,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     (async () => {
-      // 2. Ultra-fast streaming fetch (reads first 30-100KB, finishes in ~150ms instead of downloading 2MB!)
+      // 2. Fast streaming fetch (reads first 30-100KB, finishes in ~150ms instead of downloading whole page!)
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
 
         const resp = await fetch(orderUrl, {
           credentials: 'include',
@@ -296,7 +363,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       }
 
       // 3. Fast background tab fallback
-      openOrderTabAndExtractPhone(orderUrl, sendResponse);
+      try {
+        openOrderTabAndExtractPhone(orderUrl, sendResponse);
+      } catch (e) {
+        sendResponse({ success: false, error: e.message || 'Background tab failed.' });
+      }
     })();
 
     return true; // Keep sendResponse open asynchronously
