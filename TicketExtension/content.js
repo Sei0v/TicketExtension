@@ -4,8 +4,10 @@
   const isFreshdesk = window.location.host.includes('freshdesk');
   const isBreadfastAdmin = window.location.host.includes('breadfast.com') &&
     (window.location.pathname.includes('post.php') || window.location.pathname.includes('wp-admin'));
+  const isFoodRms = window.location.host.includes('food-rms') ||
+    (window.location.host.includes('rms') && window.location.host.includes('breadfast'));
 
-  if (!isFreshdesk && !isBreadfastAdmin) {
+  if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms) {
     return;
   }
 
@@ -827,6 +829,10 @@
     // Helper to detect if an element is inside Freshdesk conversation comments/notes/threads
     const isInsideConversation = (el) => {
       if (!el) return false;
+      // Never block customer contact / requester info fields
+      if (el.closest('[data-test-id*="fields-info"], [data-test-id*="requester"], [data-test-id*="contact"], .ticket-requester-info, .requester-info')) {
+        return false;
+      }
       return Boolean(el.closest(
         '.conversation-item, .ticket-comment, .note-item, .thread-item, ' +
         '.conversation-reply, .redactor-editor, .fr-box, article, .chat-message, ' +
@@ -834,17 +840,23 @@
         '.ticket-conv-list, .timeline, .conv-item, .conversation__item, .ticket-thread, ' +
         '.ticket-notes, .discussion-container, .note-container, .private-note, .public-note, ' +
         '.ticket-message, .conversation_list, #conversation-list, [data-test-id*="thread" i], ' +
-        '[data-test-id*="note" i], [data-test-id*="activity" i], .feed-container, .activity-item'
+        '[data-test-id="ticket-notes"], [data-test-id="private-note"], [data-test-id="public-note"], ' +
+        '[data-test-id*="activity" i], .feed-container, .activity-item'
       ));
     };
 
     // Helper to detect if an element is inside Freshdesk agent/assignee cards
     const isInsideAgent = (el) => {
       if (!el) return false;
+      // Never treat customer contact / requester sidebar fields as agent fields
+      if (el.closest('[data-test-id*="fields-info"], [data-test-id*="requester"], [data-test-id*="contact"], .ticket-requester-info, .requester-info, .contact-details')) {
+        return false;
+      }
+      // Strictly match assignee/agent selection widgets - never match workspace or ticket-view wrappers!
       return Boolean(el.closest(
-        '[data-test-id*="agent" i], [data-test-id*="assignee" i], ' +
-        '.agent-details, .assignee-details, .ticket-agent, .ticket-assignee, ' +
-        '.agent-name, .assignee-name, [data-test-id="ticket-agent"]'
+        '[data-test-id="ticket-agent"], [data-test-id="ticket-assignee"], [data-test-id="assignee"], ' +
+        '[data-test-id="select-agent"], [data-test-id="agent-dropdown"], [data-test-id="ticket-assignee-field"], ' +
+        '.ticket-assignee, .ticket-agent, .assignee-details, .agent-details, .assignee-name'
       ));
     };
 
@@ -1185,9 +1197,34 @@
     function formatPhoneForKairos(rawPhone) {
       if (!rawPhone) return null;
       let cleaned = String(rawPhone).replace(/[^\d]/g, '');
-      if (cleaned.startsWith('0020')) cleaned = cleaned.substring(2);
-      if (cleaned.startsWith('01') && cleaned.length === 11) cleaned = '2' + cleaned;
-      return cleaned;
+      if (!cleaned) return null;
+
+      if (cleaned.startsWith('0020')) {
+        cleaned = cleaned.substring(2);
+      }
+
+      // Egyptian mobile: 010, 011, 012, 015 (11 digits) -> prefix with 2 -> 201x xxxxxxxx (12 digits)
+      if (cleaned.startsWith('01') && cleaned.length === 11) {
+        cleaned = '2' + cleaned;
+      } else if (/^1[0125]\d{8}$/.test(cleaned)) {
+        cleaned = '20' + cleaned;
+      }
+
+      // Egyptian mobile: exactly 12 digits starting with 2010, 2011, 2012, 2015
+      if (/^201[0125]\d{8}$/.test(cleaned)) {
+        return cleaned;
+      }
+
+      // International phone: 10 to 15 digits
+      if (cleaned.length >= 10 && cleaned.length <= 15) {
+        // Strictly reject order numbers (13 digits starting with 2[0-9]{3} like 2809100214792)
+        if (cleaned.length === 13 && /^(?:2\d{3})/.test(cleaned)) {
+          return null;
+        }
+        return cleaned;
+      }
+
+      return null;
     }
 
     function extractCustomerPhone() {
@@ -1195,42 +1232,37 @@
       const exactSelectors = [
         '[data-test-field-content="Work phone" i]',
         '[data-test-id="fields-info-phone" i] [data-test-field-content]',
+        '[data-test-id="fields-info-phone" i] .text__content',
         '[data-test-id="fields-info-phone" i]',
-        '[data-test-id*="fields-info-phone" i]',
-        '[data-test-id*="fields-info-mobile" i]',
         '[data-test-field-content="Mobile phone" i]',
-        '[data-test-field-content="Phone" i]'
+        '[data-test-id="fields-info-mobile" i] [data-test-field-content]',
+        '[data-test-id="fields-info-mobile" i] .text__content',
+        '[data-test-id="fields-info-mobile" i]'
       ];
 
       for (const sel of exactSelectors) {
         const el = document.querySelector(sel);
         if (el && !isInsideConversation(el) && !isInsideAgent(el)) {
           const text = (el.textContent || '').trim();
-          const digits = text.replace(/[^\d]/g, '');
-          if (digits.length >= 8 && digits.length <= 15) {
-            const p = formatPhoneForKairos(digits);
-            if (p && p.length >= 8) return p;
-          }
-          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d|\+?\d{8,14}/);
+          const p = formatPhoneForKairos(text);
+          if (p) return p;
+          const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d|\+?\d{10,15}/);
           if (m) {
-            const p = formatPhoneForKairos(m[0]);
-            if (p && p.length >= 8) return p;
+            const p2 = formatPhoneForKairos(m[0]);
+            if (p2) return p2;
           }
         }
       }
 
       // 2. Search by [data-test-field-title="Work phone"]
-      const titleEl = document.querySelector('[data-test-field-title="Work phone" i], [data-test-field-title="Phone" i], [data-test-field-title="Mobile phone" i]');
+      const titleEl = document.querySelector('[data-test-field-title="Work phone" i], [data-test-field-title="Mobile phone" i], [data-test-field-title="Phone" i]');
       if (titleEl && !isInsideConversation(titleEl) && !isInsideAgent(titleEl)) {
         const parent = titleEl.parentElement;
         if (parent) {
           const content = parent.querySelector('[data-test-field-content]') || titleEl.nextElementSibling;
           if (content) {
-            const digits = (content.textContent || '').replace(/[^\d]/g, '');
-            if (digits.length >= 8 && digits.length <= 15) {
-              const p = formatPhoneForKairos(digits);
-              if (p && p.length >= 8) return p;
-            }
+            const p = formatPhoneForKairos(content.textContent);
+            if (p) return p;
           }
         }
       }
@@ -1246,7 +1278,7 @@
         for (const a of telLinks) {
           const raw = (a.getAttribute('href') || '').replace(/^tel:/i, '').trim();
           const phone = formatPhoneForKairos(raw);
-          if (phone && phone.length >= 8) return phone;
+          if (phone) return phone;
         }
 
         const text = (container.textContent || '').trim();
@@ -1254,7 +1286,7 @@
           const m = text.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
           if (m) {
             const phone = formatPhoneForKairos(m[0]);
-            if (phone && phone.length >= 8) return phone;
+            if (phone) return phone;
           }
         }
       }
@@ -1265,29 +1297,35 @@
     function handleChat(btnEl) {
       const origText = btnEl.textContent;
 
+      const openKairos = (query, label) => {
+        showToast(`Customer Chat opened (${label})`, 'info');
+        const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(query)}`;
+        try {
+          chrome.runtime.sendMessage({ action: 'open_kairos_search', url: kairosUrl });
+        } catch (e) {
+          window.open(kairosUrl, '_blank', 'noopener,noreferrer');
+        }
+      };
+
       // 1. Instant check for "Work phone" / Contact phone directly on Freshdesk page (0ms!)
       const pagePhone = extractCustomerPhone();
       if (pagePhone) {
-        showToast(`Customer Chat opened (${pagePhone})`, 'info');
-        const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(pagePhone)}`;
-        window.open(kairosUrl, '_blank', 'noopener,noreferrer');
+        openKairos(pagePhone, pagePhone);
         return;
       }
 
-      // 2. Search Phone from Order page (as in order details picture)
-      const orderLink = findOrderLink();
+      // 2. Fallback check for UID
       const uid = extractUidWithValidation();
-
       const fallbackToUid = () => {
         if (uid) {
-          showToast(`Customer Chat opened with ID (${uid})`, 'info');
-          const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(uid)}`;
-          window.open(kairosUrl, '_blank', 'noopener,noreferrer');
+          openKairos(uid, `ID ${uid}`);
           return true;
         }
         return false;
       };
 
+      // 3. Search Phone from Order page
+      const orderLink = findOrderLink();
       if (!orderLink) {
         // If no order link on page, fallback to UID if available
         if (fallbackToUid()) return;
@@ -1369,7 +1407,7 @@
         showToast('Could not find Order Number on this ticket.', 'error');
         return;
       }
-      const rmsUrl = `https://food-rms.breadfast.com/orders/list?page=1&limit=10&sortBy=placedAt&sortOrder=desc&search=${encodeURIComponent(orderNumber)}&searchBy=orderNumber`;
+      const rmsUrl = `https://food-rms.breadfast.com/orders/list?page=1&limit=10&sortBy=placedAt&sortOrder=desc&search=${encodeURIComponent(orderNumber)}&searchBy=orderNumber&bf_autoclick=1`;
       window.open(rmsUrl, '_blank', 'noopener,noreferrer');
     });
 
@@ -2310,6 +2348,196 @@
       document.addEventListener('DOMContentLoaded', injectOrderPageChatButton);
     } else {
       injectOrderPageChatButton();
+    }
+  }
+
+  // =========================================================================
+  // =========================================================================
+  // Breadfast Food RMS Automation: Auto-open Order Details from List
+  // =========================================================================
+  if (isFoodRms) {
+    // If already on order details page (/orders/details/...), do nothing!
+    if (window.location.pathname.includes('/orders/details/')) {
+      return;
+    }
+
+    const usp = new URLSearchParams(window.location.search);
+    const searchOrderNum = usp.get('search') || '';
+    const isAutoclick = usp.has('bf_autoclick') || Boolean(searchOrderNum);
+
+    if (isAutoclick) {
+      let isNavigating = false;
+
+      function goToDetails(orderId, triggerEl = null) {
+        if (isNavigating) return;
+        isNavigating = true;
+
+        showToast(`Opening Order Details (#${orderId})...`, 'info');
+        const targetUrl = `https://food-rms.breadfast.com/orders/details/${orderId}`;
+
+        if (triggerEl) {
+          ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
+            try {
+              triggerEl.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+            } catch (e) { }
+          });
+          try {
+            if (typeof triggerEl.click === 'function') triggerEl.click();
+          } catch (e) { }
+        }
+
+        // Direct navigation guarantees redirection even if synthetic click didn't trigger router
+        window.location.href = targetUrl;
+      }
+
+      // Method 1: Intercept Fetch in Main World for instant redirection as soon as API responds
+      try {
+        const interceptScript = document.createElement('script');
+        interceptScript.textContent = `
+          (function() {
+            const usp = new URLSearchParams(window.location.search);
+            if (!usp.has('bf_autoclick') && !usp.has('search')) return;
+            if (window.location.pathname.includes('/orders/details/')) return;
+
+            let redirected = false;
+            function tryRedirect(id) {
+              if (redirected || !id) return;
+              const s = String(id).trim();
+              if (/^\\d{4,10}$/.test(s)) {
+                redirected = true;
+                window.location.href = 'https://food-rms.breadfast.com/orders/details/' + s;
+              }
+            }
+
+            const origFetch = window.fetch;
+            if (origFetch) {
+              window.fetch = async function(...args) {
+                const resp = await origFetch.apply(this, args);
+                try {
+                  const url = String(args[0]?.url || args[0] || '');
+                  if (url.includes('order') || url.includes('/api/')) {
+                    const clone = resp.clone();
+                    clone.json().then(data => {
+                      function scanForId(obj, depth = 0) {
+                        if (!obj || depth > 5 || redirected) return;
+                        if (Array.isArray(obj)) {
+                          for (const item of obj) scanForId(item, depth + 1);
+                        } else if (typeof obj === 'object') {
+                          if (obj.id && /^\\d{4,10}$/.test(String(obj.id))) {
+                            tryRedirect(obj.id);
+                            return;
+                          }
+                          for (const k of Object.keys(obj)) {
+                            scanForId(obj[k], depth + 1);
+                          }
+                        }
+                      }
+                      scanForId(data);
+                    }).catch(() => {});
+                  }
+                } catch (e) {}
+                return resp;
+              };
+            }
+          })();
+        `;
+        (document.head || document.documentElement).appendChild(interceptScript);
+        interceptScript.remove();
+      } catch (e) { }
+
+      // Method 2: DOM Scanner for Details link, data-row-key, ID cells, and buttons
+      function tryFindAndOpenDetails() {
+        if (isNavigating) return true;
+
+        // Check 1: Direct link pointing to /orders/details/<id>
+        const detailsLinks = Array.from(document.querySelectorAll('a[href*="/orders/details/"]'));
+        for (const a of detailsLinks) {
+          const href = a.getAttribute('href') || a.href || '';
+          const match = href.match(/\/orders\/details\/(\d+)/);
+          if (match && match[1]) {
+            goToDetails(match[1], a);
+            return true;
+          }
+        }
+
+        // Check 2: Ant Design or table row with data-row-key="<id>"
+        const rowsWithKey = Array.from(document.querySelectorAll('[data-row-key]'));
+        for (const r of rowsWithKey) {
+          const key = (r.getAttribute('data-row-key') || '').trim();
+          if (/^\d{4,10}$/.test(key)) {
+            goToDetails(key, r);
+            return true;
+          }
+        }
+
+        // Check 3: Table cells containing the internal Order ID (e.g. 1073898)
+        // Must be purely digits (4-10 digits), NOT the hyphenated order number (e.g. 2809-100214792)
+        const cells = Array.from(document.querySelectorAll(
+          'tbody td, .ant-table-tbody td, [role="row"] [role="cell"], .table td'
+        ));
+        for (const cell of cells) {
+          const text = (cell.textContent || '').trim().replace(/^#/, '');
+          if (/^\d{4,10}$/.test(text) && !text.includes('-') && text !== searchOrderNum) {
+            const interactive = cell.querySelector('a, button, [role="button"]') || cell;
+            goToDetails(text, interactive);
+            return true;
+          }
+        }
+
+        // Check 4: Any link or button inside a row containing the searched order number
+        if (searchOrderNum) {
+          const rows = Array.from(document.querySelectorAll('tbody tr, .ant-table-tbody > tr, [role="row"]'))
+            .filter(r => !r.closest('thead'));
+          for (const row of rows) {
+            const rowText = (row.textContent || '');
+            if (rowText.includes(searchOrderNum)) {
+              // Match 4-10 digit numbers in this row that are not the order number
+              const digitsMatches = rowText.match(/\b\d{4,10}\b/g) || [];
+              for (const dm of digitsMatches) {
+                if (dm !== searchOrderNum && !searchOrderNum.includes(dm)) {
+                  const interactive = row.querySelector('a, button, [role="button"]') || row;
+                  goToDetails(dm, interactive);
+                  return true;
+                }
+              }
+            }
+          }
+        }
+
+        return false;
+      }
+
+      // Continuous polling and MutationObserver to catch row immediately
+      let attempts = 0;
+      const rmsIv = setInterval(() => {
+        attempts++;
+        if (tryFindAndOpenDetails() || attempts > 150) {
+          clearInterval(rmsIv);
+        }
+      }, 100);
+
+      const observer = new MutationObserver(() => {
+        if (tryFindAndOpenDetails()) {
+          observer.disconnect();
+          clearInterval(rmsIv);
+        }
+      });
+
+      if (document.body) {
+        observer.observe(document.body, { childList: true, subtree: true });
+      } else {
+        document.addEventListener('DOMContentLoaded', () => {
+          if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => tryFindAndOpenDetails());
+      } else {
+        tryFindAndOpenDetails();
+      }
     }
   }
 })();

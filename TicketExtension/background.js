@@ -17,54 +17,60 @@ const phoneCache = new Map();
 function formatPhoneForKairos(rawPhone) {
   if (!rawPhone) return null;
   let cleaned = String(rawPhone).replace(/[^\d]/g, '');
+  if (!cleaned) return null;
+
   if (cleaned.startsWith('0020')) {
     cleaned = cleaned.substring(2);
   }
-  // Egyptian local numbers 010, 011, 012, 015 (11 digits) -> convert 01 to 201
+
+  // Egyptian mobile: 010, 011, 012, 015 (11 digits) -> prefix with 2 -> 201x xxxxxxxx (12 digits)
   if (cleaned.startsWith('01') && cleaned.length === 11) {
     cleaned = '2' + cleaned;
+  } else if (/^1[0125]\d{8}$/.test(cleaned)) {
+    cleaned = '20' + cleaned;
   }
-  return cleaned;
+
+  // Egyptian mobile: exactly 12 digits starting with 2010, 2011, 2012, 2015
+  if (/^201[0125]\d{8}$/.test(cleaned)) {
+    return cleaned;
+  }
+
+  // International phone: 10 to 15 digits
+  if (cleaned.length >= 10 && cleaned.length <= 15) {
+    // Strictly reject order numbers (13 digits starting with 2[0-9]{3} like 2809100214792)
+    if (cleaned.length === 13 && /^(?:2\d{3})/.test(cleaned)) {
+      return null;
+    }
+    return cleaned;
+  }
+
+  return null;
 }
 
 function extractPhoneFromHtml(html) {
   if (!html) return null;
 
-  // 1. Label followed by number (supports <b>, <strong>, <p>, multiline, quotes, spaces, tel links)
-  const p1 = /Phone:?(?:<[^>]+>|["'\s\n\r]|&nbsp;)*([+\d\s\-()]{8,20})/i;
-  const m1 = html.match(p1);
-  if (m1 && m1[1]) {
-    const phone = formatPhoneForKairos(m1[1]);
-    if (phone && phone.length >= 8) return phone;
+  // 1. Primary: Search strictly inside editAddress container (WooCommerce Billing Address)
+  const editAddrMatch = html.match(/id=["']editAddress["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i) || 
+                        html.match(/class=["'][^"']*order_data_column[^"']*["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i);
+  if (editAddrMatch) {
+    const block = editAddrMatch[0];
+    const mP = block.match(/Phone:?(?:<[^>]+>|["'\s\n\r]|&nbsp;)*([+\d\s\-()]{8,20})/i) ||
+               block.match(/(?:(?:\+?20|0020)[\s\-()]*)?1[\s\-()]*[0125][\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d/);
+    if (mP && mP[1]) {
+      const phone = formatPhoneForKairos(mP[1]);
+      if (phone) return phone;
+    }
   }
 
-  // 2. tel: links
-  const telMatch = html.match(/href=["']tel:([+\d\s\-()]+)["']/i);
-  if (telMatch && telMatch[1]) {
-    const phone = formatPhoneForKairos(telMatch[1]);
-    if (phone && phone.length >= 8) return phone;
-  }
-
-  // 3. Billing phone inputs or JSON fields
+  // 2. Billing phone input or meta field
   const p3 = /(?:name|id)=["']_billing_phone["']\s+value=["']([^"']+)["']/i;
   const p3b = /value=["']([^"']+)["']\s+(?:name|id)=["']_billing_phone["']/i;
-  const p3c = /"(?:billing_phone|phone)":\s*["']([^"']+)["']/i;
+  const p3c = /"(?:billing_phone)":\s*["']([^"']+)["']/i;
   const m3 = html.match(p3) || html.match(p3b) || html.match(p3c);
   if (m3 && m3[1]) {
     const phone = formatPhoneForKairos(m3[1]);
-    if (phone && phone.length >= 8) return phone;
-  }
-
-  // 4. Fallback search inside editAddress block
-  const editAddrMatch = html.match(/id=["']editAddress["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i) || 
-                        html.match(/class=["']order_data_column["'][\s\S]*?(?:<\/div>\s*<\/div>|<\/table>|<\/form>)/i);
-  if (editAddrMatch) {
-    const m4 = editAddrMatch[0].match(/Phone:?(?:<[^>]+>|["'\s\n\r]|&nbsp;)*([+\d\s\-()]{8,20})/i) ||
-               editAddrMatch[0].match(/([+]?20[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d|01[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d[\s\-()]*\d)/);
-    if (m4 && m4[1]) {
-      const phone = formatPhoneForKairos(m4[1]);
-      if (phone && phone.length >= 8) return phone;
-    }
+    if (phone) return phone;
   }
 
   return null;
@@ -132,10 +138,10 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
         return { error: 'Not logged into Breadfast Admin. Please log into Breadfast first.' };
       }
 
+      // Strictly check WooCommerce order billing address - never search global headers or footers
       const containers = [
         document.querySelector('#editAddress'),
-        document.querySelector('.order_data_column'),
-        document.body
+        document.querySelector('.order_data_column')
       ].filter(Boolean);
 
       for (const container of containers) {
@@ -145,35 +151,29 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
           if (/^phone:?/i.test(text)) {
             const parentText = el.parentElement ? el.parentElement.textContent : '';
             const match = parentText.match(/phone:?\s*([+\d\s\-()]{8,})/i);
-            if (match) return { success: true, phone: match[1].trim() };
+            if (match) {
+              const p = formatPhoneForKairos(match[1]);
+              if (p) return { success: true, phone: p };
+            }
 
             let next = el.nextSibling;
             while (next) {
               const sibText = (next.textContent || '').trim();
               const sibMatch = sibText.match(/([+\d\s\-()]{8,})/);
-              if (sibMatch) return { success: true, phone: sibMatch[1].trim() };
+              if (sibMatch) {
+                const p = formatPhoneForKairos(sibMatch[1]);
+                if (p) return { success: true, phone: p };
+              }
               next = next.nextSibling;
             }
           }
         }
 
-        const telLinks = Array.from(container.querySelectorAll('a[href^="tel:"]'));
-        if (telLinks.length > 0) {
-          const href = telLinks[0].getAttribute('href') || '';
-          const raw = href.replace('tel:', '').trim();
-          if (raw) return { success: true, phone: raw };
+        const phoneInput = container.querySelector('input[name*="billing_phone" i], input#_billing_phone');
+        if (phoneInput && phoneInput.value) {
+          const p = formatPhoneForKairos(phoneInput.value);
+          if (p) return { success: true, phone: p };
         }
-
-        const phoneInput = container.querySelector('input[name*="phone" i], input[id*="phone" i]');
-        if (phoneInput && phoneInput.value && phoneInput.value.trim().length >= 8) {
-          return { success: true, phone: phoneInput.value.trim() };
-        }
-      }
-
-      const bodyText = document.body ? (document.body.innerText || '') : '';
-      const match = bodyText.match(/phone:?\s*([+\d\s\-()]{8,})/i);
-      if (match) {
-        return { success: true, phone: match[1].trim() };
       }
 
       return null;
@@ -214,6 +214,14 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'open_kairos_search') {
+    if (request.url) {
+      chrome.tabs.create({ url: request.url, active: true });
+    }
+    sendResponse({ success: true });
+    return true;
+  }
+
   if (request.action === 'open_chat_search') {
     const orderUrl = request.url;
     if (!orderUrl) {
@@ -224,10 +232,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 1. Instant cache check (0ms)
     if (phoneCache.has(orderUrl)) {
       const cachedPhone = phoneCache.get(orderUrl);
-      const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(cachedPhone)}`;
-      chrome.tabs.create({ url: kairosUrl, active: true });
-      sendResponse({ success: true, phone: cachedPhone });
-      return true;
+      const validCached = formatPhoneForKairos(cachedPhone);
+      if (validCached) {
+        const kairosUrl = `https://kairos.breadfast.com/app/accounts/1/search?q=${encodeURIComponent(validCached)}`;
+        chrome.tabs.create({ url: kairosUrl, active: true });
+        sendResponse({ success: true, phone: validCached });
+        return true;
+      } else {
+        phoneCache.delete(orderUrl);
+      }
     }
 
     (async () => {
