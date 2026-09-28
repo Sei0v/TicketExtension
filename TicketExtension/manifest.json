@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Freshdesk Ticket Buttons",
-  "version": "1.5",
-  "description": "Adds Create Ticket, Senior Ticket, RMS, and Delay Calculator buttons to Freshdesk ticket pages.",
+  "version": "2.1",
+  "description": "Adds Create Ticket, Senior Ticket, Tree Menu, RMS, Chat, and Delay Calculator buttons to Freshdesk ticket pages.",
   "permissions": [
     "activeTab",
     "scripting"
