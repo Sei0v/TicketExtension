@@ -825,6 +825,8 @@
     const chatBtn = createBtn('btn-chat-search', 'Chat', '#10b981');
     chatBtn.title = 'Open Customer Chat (Kairos Search)';
     const delayBtn = createBtn('btn-delay-calc', 'Calculate Delay', '#f59e0b');
+    const calcBtn = createBtn('btn-percentage-calc', 'Calc', '#8b5cf6');
+    calcBtn.title = 'Percentage Calculator';
 
     // Helper to detect if an element is inside Freshdesk conversation comments/notes/threads
     const isInsideConversation = (el) => {
@@ -1400,6 +1402,408 @@
     }
 
     delayBtn.addEventListener('click', () => handleCalculateDelay(delayBtn));
+    calcBtn.addEventListener('click', () => openPercentageCalcModal());
+
+    // =========================================================================
+    // Percentage Calculator Popup Modal
+    // =========================================================================
+    function openPercentageCalcModal() {
+      // If modal already open, close it (toggle)
+      const existing = document.getElementById('bf-calc-overlay');
+      if (existing) {
+        existing.remove();
+        return;
+      }
+
+      // Add CSS styles if not yet injected
+      if (!document.getElementById('bf-calc-styles')) {
+        const styleEl = document.createElement('style');
+        styleEl.id = 'bf-calc-styles';
+        styleEl.textContent = `
+          @keyframes bfCalcFadeIn {
+            from { opacity: 0; transform: scale(0.94); }
+            to { opacity: 1; transform: scale(1); }
+          }
+          .bf-calc-chip {
+            padding: 4px 10px;
+            background: #334155;
+            color: #cbd5e1;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+          }
+          .bf-calc-chip:hover {
+            background: #475569;
+            color: #ffffff;
+            border-color: #8b5cf6;
+            transform: translateY(-1px);
+          }
+          .bf-calc-chip.active {
+            background: #8b5cf6;
+            color: #ffffff;
+            border-color: #a78bfa;
+          }
+          .bf-calc-copy-btn {
+            padding: 4px 10px;
+            background: #334155;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+          }
+          .bf-calc-copy-btn:hover {
+            background: #475569;
+            border-color: #64748b;
+          }
+          .bf-calc-copy-btn:active {
+            transform: scale(0.95);
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+
+      // Overlay
+      const overlay = document.createElement('div');
+      overlay.id = 'bf-calc-overlay';
+      overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.65);
+        backdrop-filter: blur(4px);
+        z-index: 2147483640;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      `;
+
+      // Modal container
+      const modal = document.createElement('div');
+      modal.id = 'bf-calc-modal';
+      modal.style.cssText = `
+        background: #1e293b;
+        color: #f8fafc;
+        width: 370px;
+        max-width: 92vw;
+        border-radius: 14px;
+        border: 1px solid #334155;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: bfCalcFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      `;
+
+      // Modal Header
+      const header = document.createElement('div');
+      header.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+        cursor: grab;
+        user-select: none;
+      `;
+
+      const titleWrap = document.createElement('div');
+      titleWrap.style.cssText = 'display:flex; align-items:center; gap:8px;';
+      titleWrap.innerHTML = `
+        <span style="font-size: 18px;">🧮</span>
+        <div>
+          <div style="font-weight: 700; font-size: 14px; color: #f8fafc;">Percentage Calculator</div>
+          <div style="font-size: 11px; color: #94a3b8;">Quick calculation tool</div>
+        </div>
+      `;
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText = `
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+      `;
+      closeBtn.addEventListener('mouseenter', () => {
+        closeBtn.style.color = '#fff';
+        closeBtn.style.background = '#334155';
+      });
+      closeBtn.addEventListener('mouseleave', () => {
+        closeBtn.style.color = '#94a3b8';
+        closeBtn.style.background = 'transparent';
+      });
+      const closeModal = () => overlay.remove();
+      closeBtn.addEventListener('click', closeModal);
+
+      header.appendChild(titleWrap);
+      header.appendChild(closeBtn);
+      modal.appendChild(header);
+
+      // Modal Body
+      const body = document.createElement('div');
+      body.style.cssText = 'padding: 18px; display: flex; flex-direction: column; gap: 14px;';
+
+      // 1. Amount Input
+      const amountGroup = document.createElement('div');
+      amountGroup.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
+      amountGroup.innerHTML = `
+        <label style="font-size: 12px; font-weight: 600; color: #cbd5e1;">Amount:</label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <input type="number" id="bf-calc-amount" placeholder="e.g. 1000" step="any"
+            style="width: 100%; box-sizing: border-box; padding: 10px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 600; outline: none; transition: border-color 0.2s;" />
+        </div>
+      `;
+
+      // 2. Percentage Input
+      const percentGroup = document.createElement('div');
+      percentGroup.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
+      percentGroup.innerHTML = `
+        <label style="font-size: 12px; font-weight: 600; color: #cbd5e1;">Percentage:</label>
+        <div style="position: relative; display: flex; align-items: center;">
+          <input type="number" id="bf-calc-percent" placeholder="e.g. 65" step="any"
+            style="width: 100%; box-sizing: border-box; padding: 10px 32px 10px 12px; background: #0f172a; border: 1px solid #475569; border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 600; outline: none; transition: border-color 0.2s;" />
+          <span style="position: absolute; right: 12px; color: #94a3b8; font-weight: bold; font-size: 14px; pointer-events: none;">%</span>
+        </div>
+      `;
+
+      // Quick Chips (10%, 20%, 25%, 50%, 65%, 70%, 100%)
+      const chipsContainer = document.createElement('div');
+      chipsContainer.style.cssText = 'display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;';
+      const presetPercentages = [10, 20, 25, 50, 65, 70, 100];
+      presetPercentages.forEach(val => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'bf-calc-chip';
+        chip.textContent = `${val}%`;
+        chip.dataset.val = val;
+        chipsContainer.appendChild(chip);
+      });
+      percentGroup.appendChild(chipsContainer);
+
+      // 3. Result Box
+      const resultBox = document.createElement('div');
+      resultBox.style.cssText = `
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      `;
+
+      resultBox.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700;">Result</div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span id="bf-calc-res-val" style="font-size: 26px; font-weight: 800; color: #10b981; font-family: monospace;">0</span>
+            <button type="button" class="bf-calc-copy-btn" id="bf-calc-copy-btn">📋 Copy</button>
+          </div>
+          <div id="bf-calc-formula" style="font-size: 12px; color: #64748b; font-family: monospace;">0 × 0% = 0</div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 10px; border-top: 1px dashed #334155;">
+          <span style="font-size: 12px; color: #94a3b8; font-weight: 600;">Remaining:</span>
+          <span id="bf-calc-res-rem" style="font-size: 16px; font-weight: 700; color: #38bdf8; font-family: monospace;">0</span>
+        </div>
+      `;
+
+      // 4. Action bar (Clear button)
+      const actionRow = document.createElement('div');
+      actionRow.style.cssText = 'display: flex; justify-content: flex-end;';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.textContent = 'Clear';
+      clearBtn.style.cssText = `
+        padding: 5px 12px;
+        background: transparent;
+        color: #94a3b8;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+      `;
+      clearBtn.addEventListener('mouseenter', () => {
+        clearBtn.style.color = '#f87171';
+        clearBtn.style.borderColor = '#f87171';
+      });
+      clearBtn.addEventListener('mouseleave', () => {
+        clearBtn.style.color = '#94a3b8';
+        clearBtn.style.borderColor = '#475569';
+      });
+      actionRow.appendChild(clearBtn);
+
+      body.appendChild(amountGroup);
+      body.appendChild(percentGroup);
+      body.appendChild(resultBox);
+      body.appendChild(actionRow);
+      modal.appendChild(body);
+      overlay.appendChild(modal);
+      document.body.appendChild(overlay);
+
+      // Elements
+      const amountInput = modal.querySelector('#bf-calc-amount');
+      const percentInput = modal.querySelector('#bf-calc-percent');
+      const resValEl = modal.querySelector('#bf-calc-res-val');
+      const formulaEl = modal.querySelector('#bf-calc-formula');
+      const remValEl = modal.querySelector('#bf-calc-res-rem');
+      const copyBtn = modal.querySelector('#bf-calc-copy-btn');
+      const chips = modal.querySelectorAll('.bf-calc-chip');
+
+      const formatNum = (num) => {
+        if (isNaN(num)) return '0';
+        return Number.isInteger(num) ? String(num) : num.toFixed(2);
+      };
+
+      const recalculate = () => {
+        const a = parseFloat(amountInput.value);
+        const p = parseFloat(percentInput.value);
+
+        // Update active chip state
+        chips.forEach(c => {
+          if (parseFloat(c.dataset.val) === p) {
+            c.classList.add('active');
+          } else {
+            c.classList.remove('active');
+          }
+        });
+
+        if (isNaN(a) || isNaN(p)) {
+          resValEl.textContent = '0';
+          remValEl.textContent = '0';
+          formulaEl.textContent = `${formatNum(a || 0)} × ${formatNum(p || 0)}% = 0`;
+          return;
+        }
+
+        const result = (a * p) / 100;
+        const remaining = a - result;
+
+        resValEl.textContent = formatNum(result);
+        remValEl.textContent = formatNum(remaining);
+        formulaEl.textContent = `${formatNum(a)} × ${formatNum(p)}% = ${formatNum(result)}`;
+      };
+
+      amountInput.addEventListener('input', recalculate);
+      percentInput.addEventListener('input', recalculate);
+
+      chips.forEach(c => {
+        c.addEventListener('click', () => {
+          percentInput.value = c.dataset.val;
+          recalculate();
+          percentInput.focus();
+        });
+      });
+
+      // Clear button
+      clearBtn.addEventListener('click', () => {
+        amountInput.value = '';
+        percentInput.value = '';
+        chips.forEach(c => c.classList.remove('active'));
+        recalculate();
+        amountInput.focus();
+      });
+
+      // Copy result button
+      copyBtn.addEventListener('click', () => {
+        const text = resValEl.textContent;
+        if (!text || text === '0') return;
+        navigator.clipboard.writeText(text).then(() => {
+          copyBtn.textContent = '✓ Copied!';
+          copyBtn.style.background = '#10b981';
+          copyBtn.style.borderColor = '#10b981';
+          setTimeout(() => {
+            copyBtn.textContent = '📋 Copy';
+            copyBtn.style.background = '#334155';
+            copyBtn.style.borderColor = '#475569';
+          }, 1400);
+        }).catch(() => {});
+      });
+
+      // Close on backdrop click (outside modal)
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          closeModal();
+        }
+      });
+
+      // Close on Escape key
+      const keyHandler = (e) => {
+        if (e.key === 'Escape') {
+          closeModal();
+          window.removeEventListener('keydown', keyHandler);
+        }
+      };
+      window.addEventListener('keydown', keyHandler);
+
+      // Focus highlight on inputs
+      [amountInput, percentInput].forEach(inp => {
+        inp.addEventListener('focus', () => inp.style.borderColor = '#8b5cf6');
+        inp.addEventListener('blur', () => inp.style.borderColor = '#475569');
+      });
+
+      // Make draggable
+      let isDragging = false;
+      let startX = 0, startY = 0;
+      let initialLeft = 0, initialTop = 0;
+
+      header.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = modal.getBoundingClientRect();
+        initialLeft = rect.left;
+        initialTop = rect.top;
+        modal.style.position = 'fixed';
+        modal.style.margin = '0';
+        modal.style.left = `${initialLeft}px`;
+        modal.style.top = `${initialTop}px`;
+        header.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      const onMouseMove = (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        const newX = Math.max(10, Math.min(window.innerWidth - 380, initialLeft + dx));
+        const newY = Math.max(10, Math.min(window.innerHeight - 320, initialTop + dy));
+        modal.style.left = `${newX}px`;
+        modal.style.top = `${newY}px`;
+      };
+
+      const onMouseUp = () => {
+        if (isDragging) {
+          isDragging = false;
+          header.style.cursor = 'grab';
+        }
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+
+      // Focus Amount input automatically
+      setTimeout(() => amountInput.focus(), 50);
+    }
 
     rmsBtn.addEventListener('click', () => {
       const orderNumber = extractOrderNumber();
@@ -1978,6 +2382,7 @@
     container.appendChild(rmsBtn);
     container.appendChild(chatBtn);
     container.appendChild(delayBtn);
+    container.appendChild(calcBtn);
     document.body.appendChild(container);
   }
 
@@ -2390,62 +2795,7 @@
         window.location.href = targetUrl;
       }
 
-      // Method 1: Intercept Fetch in Main World for instant redirection as soon as API responds
-      try {
-        const interceptScript = document.createElement('script');
-        interceptScript.textContent = `
-          (function() {
-            const usp = new URLSearchParams(window.location.search);
-            if (!usp.has('bf_autoclick') && !usp.has('search')) return;
-            if (window.location.pathname.includes('/orders/details/')) return;
-
-            let redirected = false;
-            function tryRedirect(id) {
-              if (redirected || !id) return;
-              const s = String(id).trim();
-              if (/^\\d{4,10}$/.test(s)) {
-                redirected = true;
-                window.location.href = 'https://food-rms.breadfast.com/orders/details/' + s;
-              }
-            }
-
-            const origFetch = window.fetch;
-            if (origFetch) {
-              window.fetch = async function(...args) {
-                const resp = await origFetch.apply(this, args);
-                try {
-                  const url = String(args[0]?.url || args[0] || '');
-                  if (url.includes('order') || url.includes('/api/')) {
-                    const clone = resp.clone();
-                    clone.json().then(data => {
-                      function scanForId(obj, depth = 0) {
-                        if (!obj || depth > 5 || redirected) return;
-                        if (Array.isArray(obj)) {
-                          for (const item of obj) scanForId(item, depth + 1);
-                        } else if (typeof obj === 'object') {
-                          if (obj.id && /^\\d{4,10}$/.test(String(obj.id))) {
-                            tryRedirect(obj.id);
-                            return;
-                          }
-                          for (const k of Object.keys(obj)) {
-                            scanForId(obj[k], depth + 1);
-                          }
-                        }
-                      }
-                      scanForId(data);
-                    }).catch(() => {});
-                  }
-                } catch (e) {}
-                return resp;
-              };
-            }
-          })();
-        `;
-        (document.head || document.documentElement).appendChild(interceptScript);
-        interceptScript.remove();
-      } catch (e) { }
-
-      // Method 2: DOM Scanner for Details link, data-row-key, ID cells, and buttons
+      // DOM Scanner for Details link, data-row-key, ID cells, and buttons (CSP-compliant)
       function tryFindAndOpenDetails() {
         if (isNavigating) return true;
 
