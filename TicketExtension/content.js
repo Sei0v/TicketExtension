@@ -76,20 +76,23 @@
 
     // Helper: search by label matching a regex pattern
     const getTriggerByLabel = (regex) => {
-      const labels = Array.from(document.querySelectorAll('label, .ember-power-select-placeholder'));
+      const labels = Array.from(document.querySelectorAll('label, .ember-power-select-placeholder, .label-field, [class*="label"]'));
       for (const label of labels) {
         const txt = (label.textContent || '').trim().replace(/\s*\*\s*$/, '').trim().toLowerCase();
-        if (regex.test(txt)) {
+        const titleAttr = (label.getAttribute('title') || '').trim().toLowerCase();
+        if (regex.test(txt) || (titleAttr && regex.test(titleAttr))) {
+          const directTr = getTriggerFrom(label);
+          if (directTr && document.body.contains(directTr)) return directTr;
           const forAttr = label.getAttribute('for');
           if (forAttr) {
             const tr = getTriggerFrom(document.getElementById(forAttr));
-            if (tr) return tr;
+            if (tr && document.body.contains(tr)) return tr;
           }
           let p = label.parentElement;
           let depth = 0;
           while (p && p !== document.body && depth < 5) {
             const tr = p.querySelector('.ember-power-select-trigger');
-            if (tr) return tr;
+            if (tr && document.body.contains(tr)) return tr;
             p = p.parentElement;
             depth++;
           }
@@ -104,10 +107,15 @@
         '[data-test-id="type" i]',
         '[data-test-id="ticket_type" i]',
         '[data-test-id="ticket-type" i]',
-        '[data-test-id="tkt-properties-ticket_type" i]',
+        '[data-test-id*="properties-ticket_type" i]',
+        '[data-test-id*="properties-type" i]',
+        '[data-test-id*="tkt-properties-ticket_type" i]',
+        '[data-test-id*="tkt-properties-type" i]',
         '[data-test-select-field="type" i]',
         '[data-test-select-field="ticket_type" i]',
-        '[data-test-id="tkt-type" i]'
+        '[data-test-id="tkt-type" i]',
+        '[title="Type" i]',
+        '[title*="Type" i]'
       ];
       for (const sel of selectors) {
         const tr = getTriggerFrom(document.querySelector(sel));
@@ -169,9 +177,12 @@
         '[data-test-id*="complaint_category" i]',
         '[data-test-id*="complaint category" i]',
         '[data-test-id*="cf_complaint_category" i]',
+        '[data-test-id*="cf_complaint_category_food_agg" i]',
+        '[data-test-id*="tkt-properties-cf_complaint_category" i]',
         '[data-test-id="level-1" i]',
         '[data-test-id*="level-1" i]',
         '[data-test-id*="level_1" i]',
+        '[title*="Complaint Category Food Agg" i]',
         '[title*="Complaint Category" i]'
       ];
       for (const sel of selectors) {
@@ -185,6 +196,8 @@
     // 5. Complaint Details (Level 2)
     if (norm === 'complaint details' || norm === 'complaint detail' || (norm.includes('complaint') && (norm.includes('detail') || norm.includes('sub'))) || norm === 'detail' || norm === 'details' || norm.includes('sub_category') || norm.includes('subcategory')) {
       const selectors = [
+        '[data-test-id*="Complaint Details Food Agg" i]',
+        '[data-test-id*="complaint_details_food_agg" i]',
         '[data-test-id*="complaint_details" i]',
         '[data-test-id*="complaint details" i]',
         '[data-test-id*="cf_complaint_details" i]',
@@ -196,6 +209,7 @@
         '[data-test-id*="level-2" i]',
         '[data-test-id*="level_2" i]',
         '.nested-sub-fields [data-test-id*="level-2" i]',
+        '[title*="Complaint Details Food Agg" i]',
         '[title*="Complaint Details" i]',
         '[title*="Sub Category" i]',
         '[title*="Sub-category" i]',
@@ -248,12 +262,16 @@
     }
 
     // 7. Business Unit
-    if (norm.includes('business unit') || norm.includes('business_unit')) {
+    if (norm.includes('business unit') || norm.includes('business_unit') || norm === 'bu') {
       const selectors = [
         '[data-test-id*="business_unit" i]',
         '[data-test-id*="business-unit" i]',
         '[data-test-id*="cf_business_unit" i]',
-        '[title*="Business unit" i]'
+        '[data-test-id*="tkt-properties-cf_business_unit" i]',
+        '[data-test-id*="tkt-properties-business_unit" i]',
+        '[title*="Business unit" i]',
+        '[title*="Business Unit" i]',
+        '[data-test-select-field*="business" i]'
       ];
       for (const sel of selectors) {
         const tr = getTriggerFrom(document.querySelector(sel));
@@ -418,10 +436,6 @@
         }
 
         const currentlyOpen = isDropdownOpen(trigger);
-        // Retry opening if closed
-        if (!currentlyOpen && attempts >= 2 && attempts % 4 === 0) {
-          if (trigger) mouseClick(trigger);
-        }
 
         // Query options directly in document!
         const allOptions = Array.from(document.querySelectorAll('.ember-power-select-option, [role="option"]'));
@@ -466,17 +480,17 @@
           return;
         }
 
-        // If not found after ~280ms, try typing in search input if one exists
+        // If not found after ~280ms, try typing in search input IF inside an active dropdown
         if (attempts > 8 && !searched && currentlyOpen) {
           searched = true;
-          const searchInput = document.querySelector('.ember-power-select-search-input, input[type="search"]');
+          const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
+          const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
           if (searchInput) {
             const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
             if (nativeSetter) nativeSetter.call(searchInput, optionText);
             else searchInput.value = optionText;
             searchInput.dispatchEvent(new Event('input', { bubbles: true }));
             searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-            searchInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter' }));
           }
         }
 
@@ -612,37 +626,55 @@
     }
 
     const run = async () => {
-      // 0. Set Subject immediately
-      setTicketSubject(category, detail, subDetail);
+      const isNewTicketPage = window.location.pathname.startsWith('/a/tickets/new');
 
-      // 1. Set Type (Complaints or Feedback)
-      if (treeType) {
-        await assertDropdown('Type', treeType, 6000);
-        await new Promise(r => setTimeout(r, 120));
+      // 0. Set Subject immediately if on new ticket creation page
+      if (isNewTicketPage) {
+        setTicketSubject(category, detail, subDetail);
       }
 
-      // 2. Set Category and Details
+      // 1. Ensure Business unit is set to Food Aggregation first
+      const buTr = findDropdownTrigger('Business unit');
+      if (buTr) {
+        if (!isDropdownSelected(buTr, 'Food Aggregation')) {
+          showToast('Setting Business unit: Food Aggregation...', 'info');
+          const buOk = await assertDropdown('Business unit', 'Food Aggregation', 6000);
+          if (buOk) {
+            await new Promise(r => setTimeout(r, 400));
+          }
+        }
+      }
+
+      // 2. Set Type (Complaints or Feedback)
+      if (treeType) {
+        await assertDropdown('Type', treeType, 6000);
+        await new Promise(r => setTimeout(r, 180));
+      }
+
+      // 3. Set Category and Details
       if ((treeType || '').toLowerCase().includes('complaint')) {
         if (category) {
           await assertDropdown('Complaint Category', category, 6000);
-          await new Promise(r => setTimeout(r, 120));
+          await new Promise(r => setTimeout(r, 220));
         }
 
         if (detail) {
           let detailOk = false;
           for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 200));
+              await new Promise(r => setTimeout(r, 250));
             }
             detailOk = await assertDropdown('Complaint Details', detail, 6000);
           }
           if (subDetail) {
-            await new Promise(r => setTimeout(r, 120));
+            await new Promise(r => setTimeout(r, 180));
             await assertDropdown('Quality', subDetail, 6000);
           }
-          setTicketSubject(category, detail, subDetail);
+          if (isNewTicketPage) {
+            setTicketSubject(category, detail, subDetail);
+          }
           if (detailOk) {
-            showToast(`[Complaints] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
+            showToast(`✓ [Complaints] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
             return true;
           } else {
             console.warn('[BF Extension] Could not select Complaint Details:', detail);
@@ -652,34 +684,38 @@
       } else if ((treeType || '').toLowerCase().includes('feedback')) {
         if (category) {
           await assertDropdown('Feedback Category', category, 6000);
-          await new Promise(r => setTimeout(r, 120));
+          await new Promise(r => setTimeout(r, 220));
         }
         if (detail) {
           let detailOk = false;
           for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 200));
+              await new Promise(r => setTimeout(r, 250));
             }
             detailOk = await assertDropdown('Feedback Details', detail, 6000);
           }
           if (subDetail) {
-            await new Promise(r => setTimeout(r, 120));
+            await new Promise(r => setTimeout(r, 180));
             let qualityOk = false;
             for (let qTry = 0; qTry < 3 && !qualityOk; qTry++) {
-              if (qTry > 0) await new Promise(r => setTimeout(r, 200));
+              if (qTry > 0) await new Promise(r => setTimeout(r, 250));
               qualityOk = await assertDropdown('Quality', subDetail, 6000);
               if (!qualityOk) {
                 qualityOk = await assertDropdown('Feedback Sub-detail', subDetail, 3000);
               }
             }
           }
-          setTicketSubject(category, detail, subDetail);
-          showToast(`[Feedback] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
+          if (isNewTicketPage) {
+            setTicketSubject(category, detail, subDetail);
+          }
+          showToast(`✓ [Feedback] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
           return true;
         }
       }
 
-      setTicketSubject(category, detail, subDetail);
+      if (isNewTicketPage) {
+        setTicketSubject(category, detail, subDetail);
+      }
       return true;
     };
 
@@ -755,6 +791,7 @@
 
     let currentSide = 'right';
     let updateTreeMenuPosition = null;
+    let updateAutoFillMenuPosition = null;
     let updateSheetsMenuPosition = null;
     try {
       currentSide = localStorage.getItem('bf_buttons_position') || 'right';
@@ -782,6 +819,9 @@
 
       if (typeof updateTreeMenuPosition === 'function') {
         updateTreeMenuPosition(side);
+      }
+      if (typeof updateAutoFillMenuPosition === 'function') {
+        updateAutoFillMenuPosition(side);
       }
       if (typeof updateSheetsMenuPosition === 'function') {
         updateSheetsMenuPosition(side);
@@ -875,6 +915,38 @@
       ));
     };
 
+    // =========================================================================
+    // Resilient Ticket State Cache & Extraction Engine (Survives Scroll & SPA)
+    // =========================================================================
+    const getCurrentTicketId = () => {
+      const match = window.location.pathname.match(/\/a\/tickets\/(\d+)/);
+      return match ? match[1] : (new URLSearchParams(window.location.search).get('ticket_id') || null);
+    };
+
+    const ticketDataCache = {
+      ticketId: null,
+      orderNumber: null,
+      orderLink: null,
+      customerId: null,
+      customerName: null,
+      customerEmail: null,
+      customerPhone: null,
+      contactId: null,
+      deliveryBy: null
+    };
+
+    const resetTicketCache = (newId = null) => {
+      ticketDataCache.ticketId = newId;
+      ticketDataCache.orderNumber = null;
+      ticketDataCache.orderLink = null;
+      ticketDataCache.customerId = null;
+      ticketDataCache.customerName = null;
+      ticketDataCache.customerEmail = null;
+      ticketDataCache.customerPhone = null;
+      ticketDataCache.contactId = null;
+      ticketDataCache.deliveryBy = null;
+    };
+
     // Helper to extract UID from Breadfast Switcher Link or Freshdesk External ID in sidebar
     function extractUidWithValidation() {
       // 0. Direct Freshdesk Unique External ID field (from user's screenshot)
@@ -920,10 +992,15 @@
         }
       }
 
+      // 4. Cached customer ID fallback
+      if (ticketDataCache.customerId) {
+        return ticketDataCache.customerId;
+      }
+
       return null;
     }
 
-    function extractCustomerInfo() {
+    function scanCustomerInfoFromDom() {
       let name = '';
       let email = '';
 
@@ -966,7 +1043,23 @@
       return { name, email };
     }
 
-    function extractContactId() {
+    function extractCustomerInfo(useCache = true) {
+      const live = scanCustomerInfoFromDom();
+      const curId = getCurrentTicketId();
+      if (curId && ticketDataCache.ticketId === curId) {
+        if (live.name) ticketDataCache.customerName = live.name;
+        if (live.email) ticketDataCache.customerEmail = live.email;
+      }
+
+      if (useCache && ticketDataCache.ticketId === curId) {
+        if (!live.name && ticketDataCache.customerName) live.name = ticketDataCache.customerName;
+        if (!live.email && ticketDataCache.customerEmail) live.email = ticketDataCache.customerEmail;
+      }
+
+      return live;
+    }
+
+    function scanContactIdFromDom() {
       // 1. First priority: look strictly inside requester containers in header/sidebar
       const requesterContainers = Array.from(document.querySelectorAll(
         '[data-test-id*="requester" i], .ticket-requester-info, .requester-info, ' +
@@ -995,11 +1088,27 @@
         }
       }
 
-      // NEVER return arbitrary agent links!
       return null;
     }
 
-    function extractCustomerId() {
+    function extractContactId(useCache = true) {
+      const live = scanContactIdFromDom();
+      if (live) {
+        const curId = getCurrentTicketId();
+        if (curId && ticketDataCache.ticketId === curId) {
+          ticketDataCache.contactId = live;
+        }
+        return live;
+      }
+
+      if (useCache && ticketDataCache.contactId) {
+        return ticketDataCache.contactId;
+      }
+
+      return null;
+    }
+
+    function scanCustomerIdFromDom() {
       // 1. Try UID from switcher, unique external ID, user profile
       const uid = extractUidWithValidation();
       if (uid) return uid;
@@ -1043,25 +1152,54 @@
       }
 
       // 5. Fallback to Freshdesk contact ID
-      const contactId = extractContactId();
+      const contactId = scanContactIdFromDom();
       if (contactId) return contactId;
 
       return null;
     }
 
-    function extractOrderNumber() {
-      // 1. Check ticket title / subject in header & sticky header outside conversation
+    function extractCustomerId(useCache = true) {
+      const live = scanCustomerIdFromDom();
+      if (live) {
+        const curId = getCurrentTicketId();
+        if (curId && ticketDataCache.ticketId === curId) {
+          ticketDataCache.customerId = live;
+        }
+        return live;
+      }
+
+      if (useCache && ticketDataCache.customerId) {
+        return ticketDataCache.customerId;
+      }
+
+      return null;
+    }
+
+    function scanOrderNumberFromDom() {
+      // 1. Check document.title (Freshdesk tab title: "#123456 : Order 2809-123456 - Freshdesk")
+      // document.title NEVER unmounts or scrolls away!
+      if (document.title) {
+        const mHyphen = document.title.match(/\b(\d{4}-\d{6,})\b/);
+        if (mHyphen) return mHyphen[1];
+        const mWord = document.title.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
+        if (mWord) return mWord[1];
+      }
+
+      // 2. Check ticket title / subject in header & sticky header outside conversation
       const headerEls = Array.from(document.querySelectorAll(
         '.ticket-subject, [data-test-id="ticket-subject"], header h1, header h2, .ticket-header, ' +
-        '.ticket-sticky-header, [data-test-id="sticky-header"], .sticky-ticket-title, .sub-header'
+        '.ticket-sticky-header, [data-test-id="sticky-header"], .sticky-ticket-title, .sub-header, .ticket-title'
       )).filter(el => !isInsideConversation(el));
 
       for (const h of headerEls) {
-        const match = (h.textContent || '').match(/(\d{4}-\d{6,})/);
-        if (match) return match[1];
+        const text = (h.textContent || '').trim();
+        const mHyphen = text.match(/\b(\d{4}-\d{6,})\b/);
+        if (mHyphen) return mHyphen[1];
+        const mWord = text.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
+        if (mWord) return mWord[1];
       }
 
-      // 2. Look for order number input fields (e.g. edit mode or custom field) outside conversation
+      // 3. Look for order number input fields (e.g. edit mode or custom field) outside conversation
       const inputs = Array.from(document.querySelectorAll(
         'input[data-test-text-field*="order_number" i], input[name*="order_number" i], input[id*="order_number" i], [data-test-id*="cf_order_number" i] input'
       )).filter(el => !isInsideConversation(el));
@@ -1069,24 +1207,29 @@
       for (const input of inputs) {
         if (input && input.value) {
           const val = input.value.trim();
-          const match = val.match(/(\d{4}-\d{6,})/);
-          if (match) return match[1];
-          if (val && !val.includes(' ') && val.length >= 8) return val;
+          const mHyphen = val.match(/\b(\d{4}-\d{6,})\b/);
+          if (mHyphen) return mHyphen[1];
+          const mDigits = val.match(/\b([1-9]\d{7,13})\b/);
+          if (mDigits) return mDigits[1];
         }
       }
 
-      // 3. Look for order number containers in sidebar outside conversation
+      // 4. Look for order number containers in sidebar outside conversation
       const testIdEls = Array.from(document.querySelectorAll(
         '[data-test-id*="order_number" i], [data-test-id*="order_id" i], [data-test-id*="cf_order" i]'
       )).filter(el => !isInsideConversation(el));
 
       for (const el of testIdEls) {
         const text = (el.textContent || '').trim();
-        const match = text.match(/(\d{4}-\d{6,})/);
-        if (match) return match[1];
+        const mHyphen = text.match(/\b(\d{4}-\d{6,})\b/);
+        if (mHyphen) return mHyphen[1];
+        const mWord = text.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
+        if (mWord) return mWord[1];
+        const mDigits = text.match(/\b([1-9]\d{7,13})\b/);
+        if (mDigits) return mDigits[1];
       }
 
-      // 4. Search sidebar labels and values specifically
+      // 5. Search sidebar labels and values specifically
       const sidebar = document.querySelector(
         '.ticket-properties, [data-test-id*="properties" i], aside, .ticket-details, #ticket-properties, .sidebar-pane'
       );
@@ -1094,20 +1237,59 @@
         const labels = Array.from(sidebar.querySelectorAll('label, .field-label, dt, .tkt-sidebar-label'));
         for (const label of labels) {
           const lText = (label.textContent || '').toLowerCase();
-          if (lText.includes('order number') || lText.includes('order id')) {
+          if (lText.includes('order number') || lText.includes('order id') || lText.includes('order #')) {
             const container = label.closest('.field-container, .form-group, tr, div') || label.parentElement;
             if (container) {
-              const m = (container.textContent || '').match(/(\d{4}-\d{6,})/);
-              if (m) return m[1];
+              const cText = (container.textContent || '').trim();
+              const mHyphen = cText.match(/\b(\d{4}-\d{6,})\b/);
+              if (mHyphen) return mHyphen[1];
+              const mDigits = cText.match(/\b([1-9]\d{7,13})\b/);
+              if (mDigits) return mDigits[1];
             }
           }
         }
       }
 
+      // 6. WooCommerce / Breadfast order link in page
+      try {
+        const orderLink = findOrderLink();
+        if (orderLink) {
+          const m = orderLink.match(/[?&]post=(\d{7,14})/i) || orderLink.match(/[?&]orderId=(\d{7,14})/i);
+          if (m && m[1]) return m[1];
+        }
+      } catch (e) { }
+
+      // 7. Initial ticket description / message header
+      const firstDesc = document.querySelector('.ticket-description, article.conversation-item:first-child, [data-test-id="initial-message"]');
+      if (firstDesc) {
+        const txt = (firstDesc.textContent || '').trim();
+        const mHyphen = txt.match(/\b(\d{4}-\d{6,})\b/);
+        if (mHyphen) return mHyphen[1];
+        const mWord = txt.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
+        if (mWord) return mWord[1];
+      }
+
       return null;
     }
 
-    function extractDeliveryBy() {
+    function extractOrderNumber(useCache = true) {
+      const live = scanOrderNumberFromDom();
+      if (live) {
+        const curId = getCurrentTicketId();
+        if (curId && ticketDataCache.ticketId === curId) {
+          ticketDataCache.orderNumber = live;
+        }
+        return live;
+      }
+
+      if (useCache && ticketDataCache.orderNumber) {
+        return ticketDataCache.orderNumber;
+      }
+
+      return null;
+    }
+
+    function scanDeliveryByFromDom() {
       // 1. Check specific Delivery By elements in sidebar outside conversation
       const deliveryEls = Array.from(document.querySelectorAll(
         '[data-test-id*="delivery_by" i], [data-test-id*="cf_delivery" i], [data-test-id*="delivery" i]'
@@ -1158,6 +1340,64 @@
 
       return null;
     }
+
+    function extractDeliveryBy(useCache = true) {
+      const live = scanDeliveryByFromDom();
+      if (live) {
+        const curId = getCurrentTicketId();
+        if (curId && ticketDataCache.ticketId === curId) {
+          ticketDataCache.deliveryBy = live;
+        }
+        return live;
+      }
+
+      if (useCache && ticketDataCache.deliveryBy) {
+        return ticketDataCache.deliveryBy;
+      }
+
+      return null;
+    }
+
+    const scanAndCacheTicketData = (force = false) => {
+      const curId = getCurrentTicketId();
+      if (!curId) return;
+
+      if (ticketDataCache.ticketId !== curId || force) {
+        resetTicketCache(curId);
+      }
+
+      if (!ticketDataCache.orderNumber) {
+        const o = scanOrderNumberFromDom();
+        if (o) ticketDataCache.orderNumber = o;
+      }
+      if (!ticketDataCache.customerId) {
+        const c = scanCustomerIdFromDom();
+        if (c) ticketDataCache.customerId = c;
+      }
+      if (!ticketDataCache.customerPhone) {
+        const p = scanCustomerPhoneFromDom();
+        if (p) ticketDataCache.customerPhone = p;
+      }
+      if (!ticketDataCache.customerName || !ticketDataCache.customerEmail) {
+        const info = scanCustomerInfoFromDom();
+        if (info.name && !ticketDataCache.customerName) ticketDataCache.customerName = info.name;
+        if (info.email && !ticketDataCache.customerEmail) ticketDataCache.customerEmail = info.email;
+      }
+      if (!ticketDataCache.contactId) {
+        const cnt = scanContactIdFromDom();
+        if (cnt) ticketDataCache.contactId = cnt;
+      }
+      if (!ticketDataCache.deliveryBy) {
+        const del = scanDeliveryByFromDom();
+        if (del) ticketDataCache.deliveryBy = del;
+      }
+    };
+
+    // Auto-scan continuously & on scroll / navigation
+    scanAndCacheTicketData();
+    setInterval(() => scanAndCacheTicketData(), 800);
+    window.addEventListener('scroll', () => scanAndCacheTicketData(), { passive: true });
+    window.addEventListener('popstate', () => scanAndCacheTicketData(true));
 
     const openTicketPage = (btnEl, origText, extraParams = {}) => {
       btnEl.textContent = 'Creating...';
@@ -1230,20 +1470,25 @@
         const text = (a.textContent || '').trim().toLowerCase();
         const href = a.getAttribute('href') || a.href || '';
         if (text === 'order' && (href.includes('post.php') || href.includes('breadfast.com'))) {
-          return href.startsWith('http') ? href : (a.href || href);
+          const res = href.startsWith('http') ? href : (a.href || href);
+          ticketDataCache.orderLink = res;
+          return res;
         }
       }
 
       for (const a of safeLinks) {
         const href = a.getAttribute('href') || a.href || '';
         if (href.includes('/wp-admin/post.php') || href.includes('breadfast.com/wp-admin')) {
-          return href.startsWith('http') ? href : (a.href || href);
+          const res = href.startsWith('http') ? href : (a.href || href);
+          ticketDataCache.orderLink = res;
+          return res;
         }
       }
 
       for (const a of safeLinks) {
         const text = (a.textContent || '').trim().toLowerCase();
         if (text === 'order' && a.href && a.href.startsWith('http')) {
+          ticketDataCache.orderLink = a.href;
           return a.href;
         }
       }
@@ -1252,11 +1497,118 @@
         const text = (a.textContent || '').trim().toLowerCase();
         const href = a.getAttribute('href') || a.href || '';
         if (text.includes('order') && href.includes('post.php')) {
-          return href.startsWith('http') ? href : (a.href || href);
+          const res = href.startsWith('http') ? href : (a.href || href);
+          ticketDataCache.orderLink = res;
+          return res;
         }
       }
 
+      // 2. Check accessible iframes (sidebar apps)
+      try {
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        for (const f of iframes) {
+          try {
+            const doc = f.contentDocument || f.contentWindow?.document;
+            if (!doc) continue;
+            const ifrLinks = Array.from(doc.querySelectorAll('a, button, [data-url], [data-href]'));
+            for (const a of ifrLinks) {
+              const text = (a.textContent || '').trim().toLowerCase();
+              const href = a.getAttribute('href') || a.href || a.getAttribute('data-url') || a.getAttribute('data-href') || '';
+              if ((text.includes('order') || href.includes('post.php') || href.includes('wp-admin')) && href.includes('post=')) {
+                const res = href.startsWith('http') ? href : (a.href || href);
+                ticketDataCache.orderLink = res;
+                return res;
+              }
+            }
+          } catch (e) { }
+        }
+      } catch (e) { }
+
+      // 3. Search document HTML directly for breadfast.com/wp-admin/post.php?post=\d+
+      try {
+        const bodyHtml = document.body ? document.body.innerHTML : '';
+        const m = bodyHtml.match(/(https?:\/\/(?:www\.)?breadfast\.com\/wp-admin\/post\.php\?[^"'\s<>]+)/i);
+        if (m && m[1]) {
+          const cleanUrl = m[1].replace(/&amp;/g, '&');
+          ticketDataCache.orderLink = cleanUrl;
+          return cleanUrl;
+        }
+      } catch (e) { }
+
+      if (ticketDataCache.orderLink) {
+        return ticketDataCache.orderLink;
+      }
+
       return null;
+    }
+
+    function extractWpOrderId() {
+      // 1. Extract post parameter from findOrderLink()
+      try {
+        const orderLink = findOrderLink();
+        if (orderLink) {
+          const m = orderLink.match(/[?&]post=(\d{5,14})/i);
+          if (m && m[1]) return m[1];
+        }
+      } catch (e) { }
+
+      // 2. Scan all links and buttons across DOM for post.php?post= or data-post-id
+      try {
+        const safeEls = Array.from(document.querySelectorAll('a, button, [role="button"], [data-url], [data-href], [data-post-id], [data-order-id]'))
+          .filter(el => !isInsideConversation(el));
+
+        for (const el of safeEls) {
+          const text = (el.textContent || '').trim().toLowerCase();
+          const href = el.getAttribute('href') || el.href || el.getAttribute('data-url') || el.getAttribute('data-href') || el.getAttribute('onclick') || '';
+          if (href && (href.includes('post.php') || href.includes('wp-admin'))) {
+            const m = href.match(/[?&]post=(\d{5,14})/i);
+            if (m && m[1]) return m[1];
+          }
+          const dataPost = el.getAttribute('data-post-id') || el.getAttribute('data-id') || el.getAttribute('data-order-id') || '';
+          if (dataPost && /^\d{5,14}$/.test(dataPost) && (text.includes('order') || (el.className || '').toLowerCase().includes('order'))) {
+            return dataPost;
+          }
+        }
+      } catch (e) { }
+
+      // 3. Scan accessible iframes (sidebar apps)
+      try {
+        const iframes = Array.from(document.querySelectorAll('iframe'));
+        for (const f of iframes) {
+          try {
+            const doc = f.contentDocument || f.contentWindow?.document;
+            if (!doc) continue;
+            const ifrLinks = Array.from(doc.querySelectorAll('a, button, [data-url], [data-href]'));
+            for (const el of ifrLinks) {
+              const href = el.getAttribute('href') || el.href || el.getAttribute('data-url') || el.getAttribute('data-href') || el.getAttribute('onclick') || '';
+              if (href && (href.includes('post.php') || href.includes('wp-admin'))) {
+                const m = href.match(/[?&]post=(\d{5,14})/i);
+                if (m && m[1]) return m[1];
+              }
+            }
+            const ifrMatch = (doc.body ? doc.body.innerHTML : '').match(/(?:wp-admin\/)?post\.php\?[^"'\s<>]*post=(\d{5,14})/i);
+            if (ifrMatch && ifrMatch[1]) return ifrMatch[1];
+          } catch (e) { }
+        }
+      } catch (e) { }
+
+      // 4. Raw HTML regex match for post.php?post=\d+
+      try {
+        const bodyHtml = document.body ? document.body.innerHTML : '';
+        const m = bodyHtml.match(/(?:wp-admin\/)?post\.php\?[^"'\s<>]*post=(\d{5,14})/i);
+        if (m && m[1]) return m[1];
+      } catch (e) { }
+
+      // 5. Fallback: extractOrderNumber()
+      try {
+        const orderNo = extractOrderNumber();
+        if (orderNo) {
+          const clean = orderNo.includes('-') ? (orderNo.split('-')[1] || orderNo) : orderNo;
+          return clean.replace(/^[^\d]+/, '').trim();
+        }
+      } catch (e) { }
+
+      return '';
     }
 
     function formatPhoneForKairos(rawPhone) {
@@ -1305,7 +1657,7 @@
       return null;
     }
 
-    function extractCustomerPhone() {
+    function scanCustomerPhoneFromDom() {
       // 1. Direct tel: links on Freshdesk (outside agent assignee cards and conversation)
       const telLinks = Array.from(document.querySelectorAll('a[href^="tel:"]'))
         .filter(el => !isInsideAgent(el) && !isInsideConversation(el));
@@ -1378,6 +1730,23 @@
           const phone = formatPhoneForKairos(m[0]);
           if (phone) return phone;
         }
+      }
+
+      return null;
+    }
+
+    function extractCustomerPhone(useCache = true) {
+      const live = scanCustomerPhoneFromDom();
+      if (live) {
+        const curId = getCurrentTicketId();
+        if (curId && ticketDataCache.ticketId === curId) {
+          ticketDataCache.customerPhone = live;
+        }
+        return live;
+      }
+
+      if (useCache && ticketDataCache.customerPhone) {
+        return ticketDataCache.customerPhone;
       }
 
       return null;
@@ -3657,21 +4026,16 @@ Have a good day.`
     // =========================================================================
     smsBtn.addEventListener('click', () => {
       const customerId = extractCustomerId();
-      const orderNo = extractOrderNumber();
-      let cleanOrderId = '';
-      if (orderNo) {
-        cleanOrderId = orderNo.includes('-') ? (orderNo.split('-')[1] || orderNo) : orderNo;
-        cleanOrderId = cleanOrderId.replace(/^[^\d]+/, '').trim();
-      }
+      const orderId = extractWpOrderId();
 
-      const smsUrl = `https://www.breadfast.com/dashboard/sms/create?orderId=${encodeURIComponent(cleanOrderId)}&&customerId=${encodeURIComponent(customerId || '')}`;
+      const smsUrl = `https://www.breadfast.com/dashboard/sms/create?orderId=${encodeURIComponent(orderId || '')}&&customerId=${encodeURIComponent(customerId || '')}`;
 
-      if (customerId && cleanOrderId) {
-        showToast(`Opening SMS Dashboard (Order #${cleanOrderId} - Customer #${customerId})...`, 'info');
+      if (customerId && orderId) {
+        showToast(`Opening SMS Dashboard (Order #${orderId} - Customer #${customerId})...`, 'info');
       } else if (customerId) {
         showToast(`Opening SMS Dashboard (Customer #${customerId})...`, 'info');
-      } else if (cleanOrderId) {
-        showToast(`Customer ID not found, opening SMS with Order #${cleanOrderId}...`, 'info');
+      } else if (orderId) {
+        showToast(`Opening SMS Dashboard (Order #${orderId})...`, 'info');
       } else {
         showToast('Opening SMS Dashboard...', 'info');
       }
@@ -3683,6 +4047,7 @@ Have a good day.`
     // Tree Button & Cascading Flyout Menu (Ticket Actions - Calm Blue)
     // =========================================================================
     const treeBtn = createBtn('btn-tree-ticket', 'Tree', '#2563eb');
+    treeBtn.title = 'New Ticket with Tree (Opens New Ticket Page)';
     treeBtn.style.width = '100%';
     treeBtn.style.display = 'flex';
     treeBtn.style.justifyContent = 'center';
@@ -4198,6 +4563,9 @@ Have a good day.`
       if (typeof closeAllSheetsMenus === 'function') {
         closeAllSheetsMenus();
       }
+      if (typeof closeAllAutoFillMenus === 'function') {
+        closeAllAutoFillMenus();
+      }
       const isOpen = rootMenu.style.display === 'block';
       if (isOpen) {
         closeAllTreeMenus();
@@ -4230,6 +4598,610 @@ Have a good day.`
     };
 
     updateTreeMenuPosition(currentSide);
+
+    // =========================================================================
+    // Auto Fill Button & Cascading Flyout Menu (Ticket Actions - Calm Blue)
+    // Fills the Tree on the CURRENT ticket (ensuring Food Aggregation first)
+    // =========================================================================
+    const autoFillBtn = createBtn('btn-autofill-ticket', 'Auto Fill', '#2563eb');
+    autoFillBtn.title = 'Auto Fill Current Ticket Tree (Food Aggregation, Type, Category, Details)';
+    autoFillBtn.style.width = '100%';
+    autoFillBtn.style.display = 'flex';
+    autoFillBtn.style.justifyContent = 'center';
+    autoFillBtn.style.alignItems = 'center';
+
+    const autoFillWrapper = document.createElement('div');
+    autoFillWrapper.id = 'bf-autofill-wrapper';
+    autoFillWrapper.style.position = 'relative';
+    autoFillWrapper.style.width = '100%';
+    autoFillWrapper.appendChild(autoFillBtn);
+
+    let autoFillRootMenu = null;
+    const activeAutoFillSubmenusByDepth = {};
+
+    const closeAllAutoFillMenus = () => {
+      if (autoFillRootMenu) autoFillRootMenu.style.display = 'none';
+      const allSubmenus = autoFillWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
+      allSubmenus.forEach(sm => sm.style.display = 'none');
+      Object.keys(activeAutoFillSubmenusByDepth).forEach(k => delete activeAutoFillSubmenusByDepth[k]);
+      autoFillWrapper.querySelectorAll('.bf-tree-item').forEach(el => {
+        el.style.backgroundColor = 'transparent';
+      });
+    };
+
+    const closeAutoFillSubmenusFromDepth = (depth) => {
+      Object.keys(activeAutoFillSubmenusByDepth).forEach(d => {
+        if (parseInt(d, 10) >= depth) {
+          if (activeAutoFillSubmenusByDepth[d]) {
+            activeAutoFillSubmenusByDepth[d].style.display = 'none';
+          }
+          delete activeAutoFillSubmenusByDepth[d];
+        }
+      });
+      autoFillWrapper.querySelectorAll('.bf-tree-item').forEach(el => {
+        if (el._childMenu && el._childMenu.style.display === 'none') {
+          el.style.backgroundColor = 'transparent';
+        }
+      });
+    };
+
+    const isTriggerDisabled = (tr) => {
+      if (!tr) return true;
+      if (tr.disabled || tr.hasAttribute('disabled')) return true;
+      if (tr.getAttribute('aria-disabled') === 'true') return true;
+      if (tr.classList.contains('ember-power-select-trigger--disabled')) return true;
+      if (tr.classList.contains('disabled')) return true;
+      const parent = tr.closest('.input, .__ui-form__select-field, .nested-fields, .nested-sub-fields, .nested-level-2-group, .nested-filter');
+      if (parent && (parent.classList.contains('disabled') || parent.classList.contains('is-loading') || parent.getAttribute('aria-disabled') === 'true')) {
+        return true;
+      }
+      return false;
+    };
+
+    const isDropdownOpen = (tr) => {
+      if (!tr) return false;
+      if (tr.getAttribute('aria-expanded') === 'true') return true;
+      if (tr.classList.contains('ember-basic-dropdown-trigger--expanded') || tr.classList.contains('ember-power-select-trigger--active')) return true;
+      const owns = tr.getAttribute('aria-owns') || tr.getAttribute('aria-controls');
+      if (owns) {
+        const content = document.getElementById(owns);
+        if (content && !content.classList.contains('ember-basic-dropdown-content--closed') && content.style.display !== 'none') {
+          return true;
+        }
+      }
+      const openContent = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed):not([style*="display: none"])');
+      return !!openContent;
+    };
+
+    const clickElement = (el) => {
+      if (!el) return;
+      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
+        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      });
+    };
+
+    const getLiveLevel1Trigger = (treeType = '') => {
+      const isFb = (treeType || '').toLowerCase().includes('feedback');
+      if (isFb) {
+        const fbCont = document.querySelector('[data-test-id*="cf_feedback_category" i]');
+        if (fbCont) {
+          const tr = fbCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, .ember-power-select-trigger');
+          if (tr) return tr;
+        }
+        const trFb = document.querySelector('[title*="Feedback Category" i] ~ .ember-power-select-trigger, [data-test-id*="cf_feedback_category" i] .ember-power-select-trigger');
+        if (trFb) return trFb;
+      } else {
+        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
+        if (foodAggCont) {
+          const tr = foodAggCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, [data-test-id*="Complaint Category" i] .ember-power-select-trigger, .ember-power-select-trigger');
+          if (tr) return tr;
+        }
+        const trFa = document.querySelector('[title*="Complaint Category Food Agg" i] ~ .ember-power-select-trigger, [data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger');
+        if (trFa) return trFa;
+      }
+
+      return document.querySelector(
+        '[data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_category" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger'
+      );
+    };
+
+    const getLiveLevel2Trigger = (treeType = '') => {
+      const isFb = (treeType || '').toLowerCase().includes('feedback');
+      if (isFb) {
+        const fbCont = document.querySelector('[data-test-id*="cf_feedback" i]');
+        if (fbCont) {
+          const tr = fbCont.querySelector(
+            '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
+            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+            '.nested-sub-fields .ember-power-select-trigger'
+          );
+          if (tr) return tr;
+        }
+        const trFb = document.querySelector('[title*="Feedback Details" i] ~ .ember-power-select-trigger, [data-test-id*="cf_feedback_details" i] .ember-power-select-trigger');
+        if (trFb) return trFb;
+      } else {
+        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
+        if (foodAggCont) {
+          const tr = foodAggCont.querySelector(
+            '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+            '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
+            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+            '.nested-sub-fields .ember-power-select-trigger'
+          );
+          if (tr) return tr;
+        }
+        const trFa = document.querySelector('[title*="Complaint Details Food Agg" i] ~ .ember-power-select-trigger, [data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger');
+        if (trFa) return trFa;
+      }
+
+      return document.querySelector(
+        '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+        '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger'
+      );
+    };
+
+    const getLiveLevel3Trigger = () => {
+      return document.querySelector(
+        '[data-test-id="level-3"] .ember-power-select-trigger, ' +
+        '[data-test-id*="quality" i] .ember-power-select-trigger, ' +
+        '[title*="Quality" i] ~ .ember-power-select-trigger, ' +
+        '.nested-sub-fields [data-test-id="level-3"] .ember-power-select-trigger'
+      );
+    };
+
+    const getLiveTypeTrigger = () => {
+      let tr = document.querySelector(
+        '[data-test-id*="properties-ticket_type" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="properties-type" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="tkt-properties-ticket_type" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="tkt-properties-type" i] .ember-power-select-trigger, ' +
+        '[data-test-id="ticket-type" i] .ember-power-select-trigger, ' +
+        '[data-test-id="type" i] .ember-power-select-trigger'
+      );
+      if (!tr) {
+        const labels = Array.from(document.querySelectorAll('label, .label-field, .ember-power-select-placeholder'));
+        const l = labels.find(el => (el.getAttribute('title') || el.textContent || '').trim().toLowerCase() === 'type');
+        if (l) {
+          const p = l.closest('.input, .__ui-form__select-field, div');
+          if (p) tr = p.querySelector('.ember-power-select-trigger');
+        }
+      }
+      return tr;
+    };
+
+    const getLiveBusinessUnitTrigger = () => {
+      let tr = document.querySelector(
+        '[data-test-id*="cf_business_unit" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="business_unit" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="tkt-properties-cf_business_unit" i] .ember-power-select-trigger'
+      );
+      if (!tr) {
+        const labels = Array.from(document.querySelectorAll('label, .label-field, .ember-power-select-placeholder'));
+        const l = labels.find(el => (el.getAttribute('title') || el.textContent || '').trim().toLowerCase() === 'business unit');
+        if (l) {
+          const p = l.closest('.input, .__ui-form__select-field, div');
+          if (p) tr = p.querySelector('.ember-power-select-trigger');
+        }
+      }
+      return tr;
+    };
+
+    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 6000) => {
+      if (!getTriggerFn || !targetValue) return false;
+      const target = targetValue.trim().toLowerCase();
+      const targetClean = target.replace(/[^a-z0-9]/g, '');
+
+      const startWait = Date.now();
+      let trigger = null;
+
+      // 1. Wait for trigger to be rendered, attached to DOM, and NOT disabled
+      while (Date.now() - startWait < maxWaitMs) {
+        trigger = getTriggerFn();
+        if (trigger && document.body.contains(trigger) && !isTriggerDisabled(trigger)) {
+          break;
+        }
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      if (!trigger || !document.body.contains(trigger)) {
+        console.warn(`[Auto Fill] Trigger for "${targetValue}" not found or remained disabled.`);
+        return false;
+      }
+
+      // 2. Check if already selected
+      const isAlreadySelected = (tr) => {
+        if (!tr) return false;
+        const selectedEl = tr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
+        const curText = ((selectedEl ? selectedEl.textContent : tr.textContent) || '').trim().toLowerCase();
+        const curClean = curText.replace(/[^a-z0-9]/g, '');
+        return curClean === targetClean || (curClean.length >= targetClean.length && curClean.includes(targetClean));
+      };
+
+      if (isAlreadySelected(trigger)) {
+        return true;
+      }
+
+      // 3. Open dropdown and find matching option
+      const startFind = Date.now();
+      let matched = false;
+      let lastClickTime = 0;
+      let searched = false;
+
+      while (Date.now() - startFind < maxWaitMs) {
+        // Keep trigger reference fresh if Ember re-rendered component
+        const liveTr = getTriggerFn();
+        if (liveTr && document.body.contains(liveTr)) {
+          trigger = liveTr;
+        }
+
+        if (isAlreadySelected(trigger)) {
+          return true;
+        }
+
+        if (isTriggerDisabled(trigger)) {
+          await new Promise(r => setTimeout(r, 80));
+          continue;
+        }
+
+        const open = isDropdownOpen(trigger);
+
+        // If dropdown closed or hasn't opened yet, re-open it every 250ms
+        if (!open && Date.now() - lastClickTime > 250) {
+          lastClickTime = Date.now();
+          clickElement(trigger);
+          await new Promise(r => setTimeout(r, 80));
+          continue;
+        }
+
+        const allOptions = Array.from(document.querySelectorAll('.ember-power-select-option, [role="option"]'));
+
+        const hasLoadingMsg = allOptions.some(o => o.classList.contains('ember-power-select-option--loading-message'));
+        if (hasLoadingMsg) {
+          // Dependent options still being loaded by Freshdesk backend, wait!
+          await new Promise(r => setTimeout(r, 100));
+          continue;
+        }
+
+        const validOptions = allOptions.filter(o => {
+          return !o.classList.contains('ember-power-select-option--loading-message') &&
+                 !o.classList.contains('ember-power-select-option--no-matches-message');
+        });
+
+        if (validOptions.length === 0) {
+          await new Promise(r => setTimeout(r, 60));
+          continue;
+        }
+
+        // 1. Exact match
+        let match = validOptions.find(o => {
+          const t = (o.textContent || '').trim().toLowerCase();
+          if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
+          return t === target || t.replace(/[^a-z0-9]/g, '') === targetClean;
+        });
+
+        // 2. Starts with / includes match
+        if (!match) {
+          match = validOptions.find(o => {
+            const t = (o.textContent || '').trim().toLowerCase();
+            if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
+            return t.startsWith(target) || target.startsWith(t) || t.includes(target) || target.includes(t);
+          });
+        }
+
+        if (match) {
+          const list = match.closest('.ember-power-select-options, ul');
+          if (list) {
+            try { list.scrollTop = match.offsetTop - list.offsetTop; } catch (e) { }
+          }
+          clickElement(match);
+          matched = true;
+
+          // Allow Ember to process selection and verify trigger
+          await new Promise(r => setTimeout(r, 150));
+          const postTr = getTriggerFn() || trigger;
+          if (isAlreadySelected(postTr)) {
+            return true;
+          }
+          break;
+        }
+
+        // Fallback: search input if options list is filtered
+        if (Date.now() - startFind > 600 && !searched && open) {
+          searched = true;
+          const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
+          const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
+          if (searchInput) {
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            if (nativeSetter) nativeSetter.call(searchInput, targetValue);
+            else searchInput.value = targetValue;
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        }
+
+        await new Promise(r => setTimeout(r, 60));
+      }
+
+      await new Promise(r => setTimeout(r, 150));
+      const finalTr = getTriggerFn() || trigger;
+      return isAlreadySelected(finalTr) || matched;
+    };
+
+    const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
+      const getL1 = () => getLiveLevel1Trigger(treeType);
+      const getL2 = () => getLiveLevel2Trigger(treeType);
+      const getL3 = () => getLiveLevel3Trigger();
+
+      // 1. Business Unit -> Check if Food Aggregation is set
+      const buTr = getLiveBusinessUnitTrigger();
+      if (buTr) {
+        const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select');
+        const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
+        if (!buText.includes('food aggregation')) {
+          showToast('Setting Business unit: Food Aggregation...', 'info');
+          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 6000);
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+
+      // 2. Type -> Complaints or Feedback
+      if (treeType) {
+        const curTypeTr = getLiveTypeTrigger();
+        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select') : null;
+        const curTypeText = ((curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent) || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetTypeClean = treeType.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const typeNeedsChange = curTypeText !== targetTypeClean;
+
+        if (typeNeedsChange) {
+          await setDropdownValue(getLiveTypeTrigger, treeType, 6000);
+          // Changing Type causes Freshdesk to re-render properties panel
+          await new Promise(r => setTimeout(r, 500));
+          const startWaitAfterType = Date.now();
+          while (Date.now() - startWaitAfterType < 4000) {
+            const l1Tr = getL1();
+            if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
+            await new Promise(r => setTimeout(r, 100));
+          }
+        }
+      }
+
+      // 3. Category (Level 1) -> Set / change category
+      if (category) {
+        const curL1 = getL1();
+        const l1SelectedEl = curL1 ? curL1.querySelector('.ember-power-select-selected-item, .trigger-power-select') : null;
+        const curL1Text = ((l1SelectedEl ? l1SelectedEl.textContent : curL1?.textContent) || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const targetL1Clean = category.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        const l1NeedsChange = curL1Text !== targetL1Clean;
+
+        await setDropdownValue(getL1, category, 8000);
+
+        if (l1NeedsChange) {
+          showToast(`Category set to "${category}". Loading details...`, 'info');
+          // Actively wait for Level 2 trigger to finish dependent reload
+          await new Promise(r => setTimeout(r, 400));
+          const startWaitL2 = Date.now();
+          while (Date.now() - startWaitL2 < 5000) {
+            const l2Tr = getL2();
+            if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
+              await new Promise(r => setTimeout(r, 350));
+              break;
+            }
+            await new Promise(r => setTimeout(r, 100));
+          }
+        } else {
+          await new Promise(r => setTimeout(r, 200));
+        }
+      }
+
+      // 4. Details (Level 2) -> Set / change details (retry up to 3 times)
+      if (detail) {
+        let l2Ok = false;
+        for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
+          if (attempt > 0) {
+            await new Promise(r => setTimeout(r, 400));
+          }
+          l2Ok = await setDropdownValue(getL2, detail, 7000);
+        }
+        if (!l2Ok) {
+          console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
+        }
+        await new Promise(r => setTimeout(r, 250));
+      }
+
+      // 5. Level 3 (Quality) -> if subDetail exists
+      if (subDetail) {
+        let l3Ok = false;
+        for (let attempt = 0; attempt < 3 && !l3Ok; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 300));
+          l3Ok = await setDropdownValue(getL3, subDetail, 6000);
+        }
+      }
+
+      showToast(`✓ Auto Fill Complete: ${category || treeType} > ${detail}${subDetail ? ' > ' + subDetail : ''}`, 'info');
+    };
+
+    const buildAutoFillSubmenu = (items, isRoot = false, path = [], depth = 0) => {
+      const menu = document.createElement('div');
+      menu.className = 'bf-tree-menu' + (isRoot ? ' bf-tree-menu-root' : '');
+      menu.style.backgroundColor = '#1e293b';
+      menu.style.color = '#f8fafc';
+      menu.style.borderRadius = '8px';
+      menu.style.padding = '6px';
+      menu.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3)';
+      menu.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+      menu.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      menu.style.fontSize = '12px';
+      menu.style.userSelect = 'none';
+      menu.style.display = 'none';
+      menu.style.minWidth = isRoot ? '160px' : '230px';
+      menu.style.maxWidth = isRoot ? '200px' : '270px';
+
+      if (!isRoot) {
+        menu.style.position = 'fixed';
+        menu.style.maxHeight = '380px';
+        menu.style.overflowY = 'auto';
+        menu.style.overflowX = 'hidden';
+        menu.style.scrollbarWidth = 'thin';
+        menu.style.scrollbarColor = '#475569 transparent';
+        menu.style.zIndex = (1000000 + depth * 10).toString();
+      } else {
+        menu.style.position = 'absolute';
+        menu.style.zIndex = '1000000';
+        menu.style.bottom = '0';
+        if (currentSide === 'right') {
+          menu.style.right = 'calc(100% + 8px)';
+          menu.style.left = 'auto';
+        } else {
+          menu.style.left = 'calc(100% + 8px)';
+          menu.style.right = 'auto';
+        }
+      }
+
+      const listContainer = document.createElement('div');
+      listContainer.className = 'bf-tree-list-container';
+      listContainer.style.display = 'flex';
+      listContainer.style.flexDirection = 'column';
+      listContainer.style.gap = '2px';
+      listContainer.style.width = '100%';
+      menu.appendChild(listContainer);
+
+      items.forEach(item => {
+        const itemEl = document.createElement('div');
+        itemEl.className = 'bf-tree-item';
+        itemEl.style.padding = '5px 8px';
+        itemEl.style.borderRadius = '5px';
+        itemEl.style.cursor = 'pointer';
+        itemEl.style.display = 'flex';
+        itemEl.style.justifyContent = 'space-between';
+        itemEl.style.alignItems = 'center';
+        itemEl.style.transition = 'background-color 0.15s';
+        itemEl.style.whiteSpace = 'nowrap';
+        itemEl.style.fontSize = '11.5px';
+
+        const labelSpan = document.createElement('span');
+        labelSpan.textContent = item.label;
+        labelSpan.style.overflow = 'hidden';
+        labelSpan.style.textOverflow = 'ellipsis';
+        labelSpan.style.paddingRight = '6px';
+        itemEl.appendChild(labelSpan);
+
+        if (item.children && item.children.length > 0) {
+          const arrowSpan = document.createElement('span');
+          arrowSpan.className = 'bf-tree-arrow';
+          arrowSpan.textContent = currentSide === 'right' ? '◂' : '▸';
+          arrowSpan.style.fontSize = '9px';
+          arrowSpan.style.opacity = '0.7';
+          arrowSpan.style.flexShrink = '0';
+          itemEl.appendChild(arrowSpan);
+
+          const childMenu = buildAutoFillSubmenu(item.children, false, [...path, item.label], depth + 1);
+          autoFillWrapper.appendChild(childMenu);
+          itemEl._childMenu = childMenu;
+
+          itemEl.addEventListener('mouseenter', () => {
+            closeAutoFillSubmenusFromDepth(depth + 1);
+            itemEl.style.backgroundColor = '#334155';
+
+            const rect = itemEl.getBoundingClientRect();
+            childMenu.style.display = 'block';
+            activeAutoFillSubmenusByDepth[depth + 1] = childMenu;
+
+            const childWidth = 240;
+            if (currentSide === 'right') {
+              let targetLeft = rect.left - childWidth - 6;
+              if (targetLeft < 10) targetLeft = rect.right + 6;
+              childMenu.style.left = `${Math.round(targetLeft)}px`;
+            } else {
+              let targetLeft = rect.right + 6;
+              if (targetLeft + childWidth > window.innerWidth - 10) {
+                targetLeft = rect.left - childWidth - 6;
+              }
+              childMenu.style.left = `${Math.round(targetLeft)}px`;
+            }
+
+            let top = rect.top - 4;
+            const menuHeight = 350;
+            if (top + menuHeight > window.innerHeight - 15) {
+              top = Math.max(10, window.innerHeight - menuHeight - 15);
+            }
+            childMenu.style.top = `${Math.round(top)}px`;
+          });
+        } else {
+          // Leaf item
+          itemEl.addEventListener('mouseenter', () => {
+            itemEl.style.backgroundColor = '#334155';
+          });
+          itemEl.addEventListener('mouseleave', () => {
+            itemEl.style.backgroundColor = 'transparent';
+          });
+
+          itemEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllAutoFillMenus();
+
+            const currentPath = [...path, item.label];
+            const treeType = currentPath[0] || 'Complaints';
+            const category = currentPath[1] || '';
+            const detail = currentPath[2] || item.label;
+            const subDetail = currentPath.length > 3 ? currentPath[3] : '';
+
+            const pathLabel = currentPath.slice(1).join(' > ');
+            showToast(`Auto Filling: ${treeType} > ${pathLabel}...`, 'info');
+            executeAutoFillTree(treeType, category, detail, subDetail);
+          });
+        }
+
+        listContainer.appendChild(itemEl);
+      });
+
+      return menu;
+    };
+
+    autoFillRootMenu = buildAutoFillSubmenu(treeData, true, []);
+    autoFillWrapper.appendChild(autoFillRootMenu);
+
+    autoFillBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof closeAllTreeMenus === 'function') closeAllTreeMenus();
+      if (typeof closeAllSheetsMenus === 'function') closeAllSheetsMenus();
+      const isOpen = autoFillRootMenu.style.display === 'block';
+      if (isOpen) {
+        closeAllAutoFillMenus();
+      } else {
+        closeAllAutoFillMenus();
+        autoFillRootMenu.style.display = 'block';
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!autoFillWrapper.contains(e.target)) {
+        closeAllAutoFillMenus();
+      }
+    });
+
+    updateAutoFillMenuPosition = (side) => {
+      if (!autoFillRootMenu) return;
+      if (side === 'right') {
+        autoFillRootMenu.style.right = 'calc(100% + 8px)';
+        autoFillRootMenu.style.left = 'auto';
+      } else {
+        autoFillRootMenu.style.left = 'calc(100% + 8px)';
+        autoFillRootMenu.style.right = 'auto';
+      }
+      const arrows = autoFillWrapper.querySelectorAll('.bf-tree-arrow');
+      arrows.forEach(ar => {
+        ar.textContent = side === 'right' ? '◂' : '▸';
+      });
+      closeAllAutoFillMenus();
+    };
+
+    updateAutoFillMenuPosition(currentSide);
 
     // =========================================================================
     // Sheets Button & Cascading Flyout Menu (KB & Shifts)
@@ -4494,6 +5466,9 @@ Have a good day.`
       if (typeof closeAllTreeMenus === 'function') {
         closeAllTreeMenus();
       }
+      if (typeof closeAllAutoFillMenus === 'function') {
+        closeAllAutoFillMenus();
+      }
       const isOpen = rootSheetsMenu.style.display === 'block';
       if (isOpen) {
         closeAllSheetsMenus();
@@ -4542,6 +5517,7 @@ Have a good day.`
     container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
     container.appendChild(treeWrapper);
+    container.appendChild(autoFillWrapper);
 
     container.appendChild(createSectionDivider());
 
