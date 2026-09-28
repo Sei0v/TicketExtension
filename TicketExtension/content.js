@@ -76,10 +76,10 @@
 
     // Helper: search by label matching a regex pattern
     const getTriggerByLabel = (regex) => {
-      const labels = Array.from(document.querySelectorAll('label, .ember-power-select-placeholder, .label-field, [class*="label"]'));
+      const labels = Array.from(document.querySelectorAll('label, .control-label, .label-text, .ember-power-select-placeholder, .label-field, [class*="label"], [data-test-label]'));
       for (const label of labels) {
-        const txt = (label.textContent || '').trim().replace(/\s*\*\s*$/, '').trim().toLowerCase();
-        const titleAttr = (label.getAttribute('title') || '').trim().toLowerCase();
+        const txt = (label.textContent || '').trim().replace(/\s*\*\s*$/, '').trim();
+        const titleAttr = (label.getAttribute('title') || '').trim();
         if (regex.test(txt) || (titleAttr && regex.test(titleAttr))) {
           const directTr = getTriggerFrom(label);
           if (directTr && document.body.contains(directTr)) return directTr;
@@ -88,11 +88,36 @@
             const tr = getTriggerFrom(document.getElementById(forAttr));
             if (tr && document.body.contains(tr)) return tr;
           }
+          let sib = label.nextElementSibling;
+          while (sib) {
+            if (sib.classList.contains('ember-power-select-trigger')) return sib;
+            const tr = sib.querySelector('.ember-power-select-trigger');
+            if (tr && document.body.contains(tr)) return tr;
+            sib = sib.nextElementSibling;
+          }
           let p = label.parentElement;
           let depth = 0;
           while (p && p !== document.body && depth < 5) {
-            const tr = p.querySelector('.ember-power-select-trigger');
-            if (tr && document.body.contains(tr)) return tr;
+            if (p.id === 'ticket-properties' || p.classList.contains('ticket-properties') || p.classList.contains('sidebar-content') || p.tagName === 'FORM') {
+              break;
+            }
+            const triggers = Array.from(p.querySelectorAll('.ember-power-select-trigger'));
+            if (triggers.length === 1 && document.body.contains(triggers[0])) {
+              return triggers[0];
+            }
+            if (triggers.length > 1) {
+              for (const tr of triggers) {
+                if (label.compareDocumentPosition(tr) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                  return tr;
+                }
+              }
+            }
+            let pSib = p.nextElementSibling;
+            if (pSib) {
+              if (pSib.classList.contains('ember-power-select-trigger')) return pSib;
+              const tr = pSib.querySelector('.ember-power-select-trigger');
+              if (tr && document.body.contains(tr)) return tr;
+            }
             p = p.parentElement;
             depth++;
           }
@@ -144,6 +169,26 @@
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
+    // 2b. Internal Request Type (Level 1 - Rider Support / Resturant Support)
+    if (norm === 'internal request type' || (norm.includes('internal') && (norm.includes('request type') || norm.includes('category') || norm.includes('support')))) {
+      const selectors = [
+        '[title="Internal Request Type" i]',
+        '[title*="Internal Request Type" i]',
+        '[data-test-id*="internal_request_type" i]',
+        '[data-test-id*="cf_internal_request_type" i]',
+        '[data-test-id*="internal_type" i]',
+        '[data-test-id*="cf_internal_type" i]',
+        '[data-test-id="level-1" i]',
+        '[data-test-id*="level-1" i]'
+      ];
+      for (const sel of selectors) {
+        const tr = getTriggerFrom(document.querySelector(sel));
+        if (tr && document.body.contains(tr)) return tr;
+      }
+      const labelTr = getTriggerByLabel(/^internal\s*request\s*type$/i) || getTriggerByLabel(/internal\s*request\s*type/i);
+      if (labelTr && document.body.contains(labelTr)) return labelTr;
+    }
+
     // 3. Feedback Details (Level 2)
     if (norm === 'feedback details' || norm === 'feedback detail' || (norm.includes('feedback') && (norm.includes('detail') || norm.includes('sub')))) {
       const selectors = [
@@ -168,6 +213,36 @@
         }
       }
       const labelTr = getTriggerByLabel(/feedback\s*detail/i);
+      if (labelTr && document.body.contains(labelTr)) return labelTr;
+    }
+
+    // 3b. Internal Request (Level 2 - Details / Issue)
+    if (norm === 'internal request' || norm === 'internal requests' || (norm.includes('internal') && !norm.includes('type') && (norm.includes('detail') || norm.includes('req') || norm.includes('issue')))) {
+      const selectors = [
+        '[data-test-id="level-2" i]',
+        '[data-test-id*="level-2" i]',
+        '[data-test-id*="level_2" i]',
+        '.nested-sub-fields [data-test-id*="level-2" i]',
+        '.nested-level-2-group .ember-power-select-trigger',
+        '.nested-sub-fields .ember-power-select-trigger',
+        '[title="Internal Request" i]',
+        '[data-test-id*="internal_request_detail" i]',
+        '[data-test-id*="cf_internal_request_detail" i]',
+        '[data-test-id*="cf_internal_request" i]:not([data-test-id*="type" i])',
+        '[data-test-id*="internal_request" i]:not([data-test-id*="type" i])'
+      ];
+      for (const sel of selectors) {
+        const tr = getTriggerFrom(document.querySelector(sel));
+        if (tr && document.body.contains(tr)) return tr;
+      }
+      const nestedContainer = document.querySelector('.nested-sub-fields, .nested-field-group, [data-test-id*="nested" i]');
+      if (nestedContainer) {
+        const triggers = Array.from(nestedContainer.querySelectorAll('.ember-power-select-trigger'));
+        if (triggers.length >= 2 && document.body.contains(triggers[1])) {
+          return triggers[1];
+        }
+      }
+      const labelTr = getTriggerByLabel(/^internal\s*request$/i);
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
@@ -331,25 +406,30 @@
 
   const isDropdownSelected = (trigger, optionText) => {
     if (!trigger || !optionText) return false;
-    const target = optionText.trim().toLowerCase();
+    const norm = (s) => (s || '').trim().toLowerCase()
+      .replace(/resturant/g, 'restaurant')
+      .replace(/requests/g, 'request')
+      .replace(/challnages/g, 'challenges');
+
+    const target = norm(optionText);
     const targetClean = target.replace(/[^a-z0-9]/g, '');
     if (!targetClean) return false;
 
     // Check selected item container
     const selectedItem = trigger.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
     if (selectedItem) {
-      const cur = (selectedItem.textContent || '').trim().toLowerCase();
+      const cur = norm(selectedItem.textContent);
       const curClean = cur.replace(/[^a-z0-9]/g, '');
-      if (curClean && (cur === target || curClean === targetClean || (cur.length >= target.length && cur.includes(target)))) {
+      if (curClean && (cur === target || curClean === targetClean || (cur.length >= target.length && cur.includes(target)) || (cur.startsWith(target) || target.startsWith(cur)))) {
         return true;
       }
     }
 
     // Check trigger text
-    const fullText = (trigger.textContent || '').trim().toLowerCase();
+    const fullText = norm(trigger.textContent);
     if (fullText && fullText !== '--' && !fullText.startsWith('select') && !fullText.includes('choose')) {
       const fullClean = fullText.replace(/[^a-z0-9]/g, '');
-      if (fullClean && (fullText === target || fullClean === targetClean || (fullText.length >= target.length && fullText.includes(target)))) {
+      if (fullClean && (fullText === target || fullClean === targetClean || (fullText.length >= target.length && fullText.includes(target)) || (fullText.startsWith(target) || target.startsWith(fullText)))) {
         return true;
       }
     }
@@ -414,7 +494,12 @@
       mouseClick(trigger);
     }
 
-    const target = optionText.trim().toLowerCase();
+    const norm = (s) => (s || '').trim().toLowerCase()
+      .replace(/resturant/g, 'restaurant')
+      .replace(/requests/g, 'request')
+      .replace(/challnages/g, 'challenges');
+
+    const target = norm(optionText);
     const targetClean = target.replace(/[^a-z0-9]/g, '');
 
     return await new Promise((resolve) => {
@@ -449,7 +534,7 @@
 
         // Priority 1: Exact text match or clean alphanumeric match
         let matched = options.find(o => {
-          const txt = (o.textContent || '').trim().toLowerCase();
+          const txt = norm(o.textContent);
           if (!txt || txt === '--' || txt.startsWith('select')) return false;
           if (txt === target) return true;
           return txt.replace(/[^a-z0-9]/g, '') === targetClean;
@@ -458,9 +543,9 @@
         // Priority 2: Starts with or includes
         if (!matched) {
           matched = options.find(o => {
-            const txt = (o.textContent || '').trim().toLowerCase();
+            const txt = norm(o.textContent);
             if (!txt || txt === '--' || txt.startsWith('select')) return false;
-            return txt.startsWith(target) || txt.includes(target);
+            return txt.startsWith(target) || target.startsWith(txt) || txt.includes(target) || target.includes(txt);
           });
         }
 
@@ -711,6 +796,39 @@
           showToast(`✓ [Feedback] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
           return true;
         }
+      } else if ((treeType || '').toLowerCase().includes('internal')) {
+        if (category) {
+          let catOk = false;
+          for (let cTry = 0; cTry < 2 && !catOk; cTry++) {
+            if (cTry > 0) await new Promise(r => setTimeout(r, 40));
+            // Exact Freshdesk UI field: "Internal Request Type"
+            catOk = await assertDropdown('Internal Request Type', category, 2500);
+            if (!catOk) {
+              catOk = await assertDropdown('Internal Request Category', category, 1200);
+            }
+          }
+          await new Promise(r => setTimeout(r, 40));
+        }
+
+        if (detail) {
+          let detailOk = false;
+          for (let attempt = 0; attempt < 2 && !detailOk; attempt++) {
+            if (attempt > 0) {
+              await new Promise(r => setTimeout(r, 40));
+            }
+            // Exact Freshdesk UI field: "Internal Request"
+            detailOk = await assertDropdown('Internal Request', detail, 2500);
+            if (!detailOk) {
+              detailOk = await assertDropdown('Internal Request Details', detail, 1200);
+            }
+          }
+        }
+
+        if (isNewTicketPage) {
+          setTicketSubject(category, detail, subDetail);
+        }
+        showToast(`✓ [Internal Requests] ${category}${detail ? ' > ' + detail : ''} applied!`, 'info');
+        return true;
       }
 
       if (isNewTicketPage) {
@@ -875,8 +993,9 @@
     chatBtn.title = 'Open Customer Chat (Kairos Search)';
 
     // Section 3: Tools & Utilities (Calm Violet)
-    const delayBtn = createBtn('btn-delay-calc', 'Calculate Delay', '#7c3aed');
-    const calcBtn = createBtn('btn-percentage-calc', 'Calc', '#7c3aed');
+    const delayBtn = createBtn('btn-delay-calc', 'Delay', '#7c3aed');
+    delayBtn.title = 'Calculate Order Delay';
+    const calcBtn = createBtn('btn-percentage-calc', 'Calculator', '#7c3aed');
     calcBtn.title = 'Percentage Calculator';
     const emailBtn = createBtn('btn-email-templates', 'Email', '#7c3aed');
     emailBtn.title = 'Email Templates Generator';
@@ -4299,6 +4418,46 @@ Have a good day.`
           },
           { label: 'BCard' }
         ]
+      },
+      {
+        label: 'Internal Requests',
+        children: [
+          {
+            label: 'Rider Support',
+            children: [
+              { label: 'Unreachable Customer' },
+              { label: 'Out of zone address' },
+              { label: 'Restaurant delay while dispatch' },
+              { label: 'Order package messy' },
+              { label: 'Customer Refuse To Receive' },
+              { label: 'Customer challnages with payment' },
+              { label: 'Customer Inappropriate Attitude' },
+              { label: 'Customer Fraud' },
+              { label: 'Customer Request to be called by CX' },
+              { label: 'Customer requests cancellation while en route' },
+              { label: 'Live OPS assistance' },
+              { label: 'Other' }
+            ]
+          },
+          {
+            label: 'Restaurant Support',
+            children: [
+              { label: 'DA is late for pick-up' },
+              { label: 'DA refused to receive order' },
+              { label: 'Electricity Issue' },
+              { label: 'Internet Issue' },
+              { label: 'Kitchen Maintenance' },
+              { label: 'System Crash' },
+              { label: 'Unavailable Menu Item – Stock Issue' },
+              { label: 'Duplicate Order' },
+              { label: 'DA rude behavior' },
+              { label: 'DA misuse of food' },
+              { label: 'Pricing Issue or Description or Photo' },
+              { label: 'Rider Picked Up wrong Order' },
+              { label: 'Other' }
+            ]
+          }
+        ]
       }
     ];
 
@@ -4529,7 +4688,7 @@ Have a good day.`
             const currentPath = [...path, item.label];
             const treeType = currentPath[0] || 'Complaints';
             const category = currentPath[1] || '';
-            const detail = currentPath[2] || item.label;
+            const detail = currentPath.length > 2 ? currentPath[2] : '';
             const subDetail = currentPath.length > 3 ? currentPath[3] : '';
 
             const pathLabel = currentPath.slice(1).join(' > ');
@@ -4543,7 +4702,7 @@ Have a good day.`
                 bf_category: category,
                 bf_detail: detail,
                 bf_sub_detail: subDetail,
-                bf_tree_choice: subDetail || detail
+                bf_tree_choice: subDetail || detail || category
               });
             }
           });
@@ -4680,79 +4839,78 @@ Have a good day.`
       });
     };
 
-    const getLiveLevel1Trigger = (treeType = '') => {
-      const isFb = (treeType || '').toLowerCase().includes('feedback');
-      if (isFb) {
-        const fbCont = document.querySelector('[data-test-id*="cf_feedback_category" i]');
-        if (fbCont) {
-          const tr = fbCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, .ember-power-select-trigger');
-          if (tr) return tr;
-        }
-        const trFb = document.querySelector('[title*="Feedback Category" i] ~ .ember-power-select-trigger, [data-test-id*="cf_feedback_category" i] .ember-power-select-trigger');
-        if (trFb) return trFb;
-      } else {
-        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
-        if (foodAggCont) {
-          const tr = foodAggCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, [data-test-id*="Complaint Category" i] .ember-power-select-trigger, .ember-power-select-trigger');
-          if (tr) return tr;
-        }
-        const trFa = document.querySelector('[title*="Complaint Category Food Agg" i] ~ .ember-power-select-trigger, [data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger');
-        if (trFa) return trFa;
-      }
+    const findFieldTriggerByLabel = (labelRegex) => {
+      const candidates = Array.from(document.querySelectorAll('label, .control-label, .label-text, .label-field, [class*="label"], [data-test-label], .ember-power-select-placeholder'));
+      for (const el of candidates) {
+        const txt = (el.getAttribute('title') || el.textContent || '').trim().replace(/\s*\*\s*$/, '').trim();
+        if (labelRegex.test(txt)) {
+          // 1. Direct or inside el
+          if (el.classList.contains('ember-power-select-trigger')) return el;
+          const inside = el.querySelector('.ember-power-select-trigger');
+          if (inside && document.body.contains(inside)) return inside;
 
-      return document.querySelector(
-        '[data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger, ' +
-        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_complaint_category" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger'
-      );
+          // 2. Check for attribute
+          const forId = el.getAttribute('for');
+          if (forId) {
+            const target = document.getElementById(forId);
+            if (target) {
+              if (target.classList.contains('ember-power-select-trigger')) return target;
+              const tr = target.querySelector('.ember-power-select-trigger');
+              if (tr && document.body.contains(tr)) return tr;
+            }
+          }
+
+          // 3. Following sibling elements of label
+          let sib = el.nextElementSibling;
+          while (sib) {
+            if (sib.classList.contains('ember-power-select-trigger')) return sib;
+            const tr = sib.querySelector('.ember-power-select-trigger');
+            if (tr && document.body.contains(tr)) return tr;
+            sib = sib.nextElementSibling;
+          }
+
+          // 4. Traverse parent hierarchy, checking siblings and children
+          let parent = el.parentElement;
+          let depth = 0;
+          while (parent && parent !== document.body && depth < 5) {
+            if (parent.id === 'ticket-properties' || parent.classList.contains('ticket-properties') || parent.classList.contains('sidebar-content') || parent.tagName === 'FORM') {
+              break;
+            }
+            const triggers = Array.from(parent.querySelectorAll('.ember-power-select-trigger'));
+            if (triggers.length === 1 && document.body.contains(triggers[0])) {
+              return triggers[0];
+            }
+            if (triggers.length > 1) {
+              // Return the first trigger that appears AFTER this label in DOM
+              for (const tr of triggers) {
+                if (el.compareDocumentPosition(tr) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                  return tr;
+                }
+              }
+            }
+            let pSib = parent.nextElementSibling;
+            if (pSib) {
+              if (pSib.classList.contains('ember-power-select-trigger')) return pSib;
+              const tr = pSib.querySelector('.ember-power-select-trigger');
+              if (tr && document.body.contains(tr)) return tr;
+            }
+            parent = parent.parentElement;
+            depth++;
+          }
+        }
+      }
+      return null;
     };
 
-    const getLiveLevel2Trigger = (treeType = '') => {
-      const isFb = (treeType || '').toLowerCase().includes('feedback');
-      if (isFb) {
-        const fbCont = document.querySelector('[data-test-id*="cf_feedback" i]');
-        if (fbCont) {
-          const tr = fbCont.querySelector(
-            '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
-            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-            '.nested-sub-fields .ember-power-select-trigger'
-          );
-          if (tr) return tr;
-        }
-        const trFb = document.querySelector('[title*="Feedback Details" i] ~ .ember-power-select-trigger, [data-test-id*="cf_feedback_details" i] .ember-power-select-trigger');
-        if (trFb) return trFb;
-      } else {
-        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
-        if (foodAggCont) {
-          const tr = foodAggCont.querySelector(
-            '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-            '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
-            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-            '.nested-sub-fields .ember-power-select-trigger'
-          );
-          if (tr) return tr;
-        }
-        const trFa = document.querySelector('[title*="Complaint Details Food Agg" i] ~ .ember-power-select-trigger, [data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger');
-        if (trFa) return trFa;
+    const getDropdownFollowing = (referenceTrigger) => {
+      if (!referenceTrigger) return null;
+      const root = referenceTrigger.closest('#ticket-properties, .ticket-properties, .sidebar-content, form, body') || document.body;
+      const allTriggers = Array.from(root.querySelectorAll('.ember-power-select-trigger'));
+      const idx = allTriggers.indexOf(referenceTrigger);
+      if (idx !== -1 && idx + 1 < allTriggers.length) {
+        return allTriggers[idx + 1];
       }
-
-      return document.querySelector(
-        '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-        '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-        '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_complaint_details" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger'
-      );
-    };
-
-    const getLiveLevel3Trigger = () => {
-      return document.querySelector(
-        '[data-test-id="level-3"] .ember-power-select-trigger, ' +
-        '[data-test-id*="quality" i] .ember-power-select-trigger, ' +
-        '[title*="Quality" i] ~ .ember-power-select-trigger, ' +
-        '.nested-sub-fields [data-test-id="level-3"] .ember-power-select-trigger'
-      );
+      return null;
     };
 
     const getLiveTypeTrigger = () => {
@@ -4765,12 +4923,7 @@ Have a good day.`
         '[data-test-id="type" i] .ember-power-select-trigger'
       );
       if (!tr) {
-        const labels = Array.from(document.querySelectorAll('label, .label-field, .ember-power-select-placeholder'));
-        const l = labels.find(el => (el.getAttribute('title') || el.textContent || '').trim().toLowerCase() === 'type');
-        if (l) {
-          const p = l.closest('.input, .__ui-form__select-field, div');
-          if (p) tr = p.querySelector('.ember-power-select-trigger');
-        }
+        tr = findFieldTriggerByLabel(/^type$|^ticket\s*type$/i);
       }
       return tr;
     };
@@ -4782,31 +4935,198 @@ Have a good day.`
         '[data-test-id*="tkt-properties-cf_business_unit" i] .ember-power-select-trigger'
       );
       if (!tr) {
-        const labels = Array.from(document.querySelectorAll('label, .label-field, .ember-power-select-placeholder'));
-        const l = labels.find(el => (el.getAttribute('title') || el.textContent || '').trim().toLowerCase() === 'business unit');
-        if (l) {
-          const p = l.closest('.input, .__ui-form__select-field, div');
-          if (p) tr = p.querySelector('.ember-power-select-trigger');
-        }
+        tr = findFieldTriggerByLabel(/business\s*unit/i);
       }
       return tr;
     };
 
-    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 6000) => {
+    const getLiveLevel1Trigger = (treeType = '') => {
+      const typeLow = (treeType || '').toLowerCase();
+      const isFb = typeLow.includes('feedback');
+      const isInternal = typeLow.includes('internal');
+
+      if (isInternal) {
+        // 1. Match label "Internal Request Type"
+        const tr = findFieldTriggerByLabel(/^internal\s*request\s*type$/i) ||
+                   findFieldTriggerByLabel(/internal\s*request\s*type/i);
+        if (tr) return tr;
+
+        // 2. Selectors
+        const sel = document.querySelector(
+          '[data-test-id*="internal_request_type" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_internal_request_type" i] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_internal_type" i] .ember-power-select-trigger, ' +
+          '[data-test-id="level-1"] .ember-power-select-trigger'
+        );
+        if (sel) return sel;
+
+        // 3. Fallback: Dropdown immediately following Type
+        const typeTr = getLiveTypeTrigger();
+        if (typeTr) {
+          const nextTr = getDropdownFollowing(typeTr);
+          if (nextTr) return nextTr;
+        }
+      } else if (isFb) {
+        const tr = findFieldTriggerByLabel(/feedback\s*category/i);
+        if (tr) return tr;
+        const fbCont = document.querySelector('[data-test-id*="cf_feedback_category" i]');
+        if (fbCont) {
+          const trCont = fbCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, .ember-power-select-trigger');
+          if (trCont) return trCont;
+        }
+        const typeTr = getLiveTypeTrigger();
+        if (typeTr) {
+          const nextTr = getDropdownFollowing(typeTr);
+          if (nextTr) return nextTr;
+        }
+      } else {
+        // Complaints
+        const tr = findFieldTriggerByLabel(/complaint\s*category/i);
+        if (tr) return tr;
+        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
+        if (foodAggCont) {
+          const trCont = foodAggCont.querySelector('[data-test-id="level-1"] .ember-power-select-trigger, [data-test-id*="Complaint Category" i] .ember-power-select-trigger, .ember-power-select-trigger');
+          if (trCont) return trCont;
+        }
+        const typeTr = getLiveTypeTrigger();
+        if (typeTr) {
+          const nextTr = getDropdownFollowing(typeTr);
+          if (nextTr) return nextTr;
+        }
+      }
+
+      return document.querySelector(
+        '[data-test-id="level-1"] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_category_food_agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_category" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback_category" i] .ember-power-select-trigger'
+      );
+    };
+
+    const getLiveLevel2Trigger = (treeType = '') => {
+      const typeLow = (treeType || '').toLowerCase();
+      const isFb = typeLow.includes('feedback');
+      const isInternal = typeLow.includes('internal');
+
+      if (isInternal) {
+        // 1. Match label "Internal Request" (must NOT be "Internal Request Type")
+        const tr = findFieldTriggerByLabel(/^internal\s*request$/i) ||
+                   findFieldTriggerByLabel(/^internal\s*request(?:\s*(?:detail|sub|issue|reason))?$/i);
+        if (tr) return tr;
+
+        // 2. Selectors
+        const sel = document.querySelector(
+          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '.nested-level-2-group .ember-power-select-trigger, ' +
+          '.nested-sub-fields .ember-power-select-trigger, ' +
+          '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+          '[data-test-id*="cf_internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger, ' +
+          '[data-test-id*="internal_request" i]:not([data-test-id*="type" i]) .ember-power-select-trigger'
+        );
+        if (sel) return sel;
+
+        // 3. Fallback: Dropdown immediately following Level 1
+        const l1Tr = getLiveLevel1Trigger(treeType);
+        if (l1Tr) {
+          const nextTr = getDropdownFollowing(l1Tr);
+          if (nextTr) return nextTr;
+        }
+      } else if (isFb) {
+        const tr = findFieldTriggerByLabel(/feedback\s*detail/i);
+        if (tr) return tr;
+        const fbCont = document.querySelector('[data-test-id*="cf_feedback" i]');
+        if (fbCont) {
+          const trCont = fbCont.querySelector(
+            '[data-test-id*="Feedback Details" i] .ember-power-select-trigger, ' +
+            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+            '.nested-sub-fields .ember-power-select-trigger'
+          );
+          if (trCont) return trCont;
+        }
+        const l1Tr = getLiveLevel1Trigger(treeType);
+        if (l1Tr) {
+          const nextTr = getDropdownFollowing(l1Tr);
+          if (nextTr) return nextTr;
+        }
+      } else {
+        // Complaints
+        const tr = findFieldTriggerByLabel(/complaint\s*detail/i);
+        if (tr) return tr;
+        const foodAggCont = document.querySelector('[data-test-id*="cf_complaint_category_food_agg" i]');
+        if (foodAggCont) {
+          const trCont = foodAggCont.querySelector(
+            '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+            '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
+            '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+            '.nested-sub-fields .ember-power-select-trigger'
+          );
+          if (trCont) return trCont;
+        }
+        const l1Tr = getLiveLevel1Trigger(treeType);
+        if (l1Tr) {
+          const nextTr = getDropdownFollowing(l1Tr);
+          if (nextTr) return nextTr;
+        }
+      }
+
+      return document.querySelector(
+        '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
+        '[data-test-id="level-2"] .ember-power-select-trigger, ' +
+        '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_complaint_details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger, ' +
+        '[data-test-id*="cf_internal_details" i] .ember-power-select-trigger'
+      );
+    };
+
+    const getLiveLevel3Trigger = () => {
+      const byLabel = findFieldTriggerByLabel(/^quality$/i);
+      if (byLabel) return byLabel;
+      return document.querySelector(
+        '[data-test-id="level-3"] .ember-power-select-trigger, ' +
+        '[data-test-id*="quality" i] .ember-power-select-trigger, ' +
+        '.nested-sub-fields [data-test-id="level-3"] .ember-power-select-trigger'
+      );
+    };
+
+    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 3000) => {
       if (!getTriggerFn || !targetValue) return false;
-      const target = targetValue.trim().toLowerCase();
+      const norm = (s) => (s || '').trim().toLowerCase()
+        .replace(/resturant/g, 'restaurant')
+        .replace(/requests/g, 'request')
+        .replace(/challnages/g, 'challenges');
+
+      const target = norm(targetValue);
       const targetClean = target.replace(/[^a-z0-9]/g, '');
 
-      const startWait = Date.now();
-      let trigger = null;
+      const isAlreadySelected = (tr) => {
+        if (!tr) return false;
+        const selectedEl = tr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
+        const curText = norm((selectedEl ? selectedEl.textContent : tr.textContent) || '');
+        if (!curText || curText === '--' || curText.startsWith('select') || curText.includes('choose')) {
+          return false;
+        }
+        const curClean = curText.replace(/[^a-z0-9]/g, '');
+        if (!curClean) return false;
+        return curClean === targetClean ||
+               (curClean.length >= targetClean.length && curClean.includes(targetClean)) ||
+               (curText.startsWith(target) || (target.length >= 4 && target.startsWith(curText)));
+      };
 
+      // Fast-path: Check immediately if trigger exists and already selected
+      let trigger = getTriggerFn();
+      if (trigger && isAlreadySelected(trigger)) {
+        return true;
+      }
+
+      const startWait = Date.now();
       // 1. Wait for trigger to be rendered, attached to DOM, and NOT disabled
       while (Date.now() - startWait < maxWaitMs) {
         trigger = getTriggerFn();
         if (trigger && document.body.contains(trigger) && !isTriggerDisabled(trigger)) {
           break;
         }
-        await new Promise(r => setTimeout(r, 60));
+        await new Promise(r => setTimeout(r, 20));
       }
 
       if (!trigger || !document.body.contains(trigger)) {
@@ -4814,27 +5134,17 @@ Have a good day.`
         return false;
       }
 
-      // 2. Check if already selected
-      const isAlreadySelected = (tr) => {
-        if (!tr) return false;
-        const selectedEl = tr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
-        const curText = ((selectedEl ? selectedEl.textContent : tr.textContent) || '').trim().toLowerCase();
-        const curClean = curText.replace(/[^a-z0-9]/g, '');
-        return curClean === targetClean || (curClean.length >= targetClean.length && curClean.includes(targetClean));
-      };
-
       if (isAlreadySelected(trigger)) {
         return true;
       }
 
-      // 3. Open dropdown and find matching option
+      // 2. Open dropdown and find matching option
       const startFind = Date.now();
       let matched = false;
       let lastClickTime = 0;
       let searched = false;
 
       while (Date.now() - startFind < maxWaitMs) {
-        // Keep trigger reference fresh if Ember re-rendered component
         const liveTr = getTriggerFn();
         if (liveTr && document.body.contains(liveTr)) {
           trigger = liveTr;
@@ -4845,17 +5155,17 @@ Have a good day.`
         }
 
         if (isTriggerDisabled(trigger)) {
-          await new Promise(r => setTimeout(r, 80));
+          await new Promise(r => setTimeout(r, 25));
           continue;
         }
 
         const open = isDropdownOpen(trigger);
 
-        // If dropdown closed or hasn't opened yet, re-open it every 250ms
-        if (!open && Date.now() - lastClickTime > 250) {
+        // If dropdown closed or hasn't opened yet, open it
+        if (!open && Date.now() - lastClickTime > 120) {
           lastClickTime = Date.now();
           clickElement(trigger);
-          await new Promise(r => setTimeout(r, 80));
+          await new Promise(r => setTimeout(r, 25));
           continue;
         }
 
@@ -4863,8 +5173,7 @@ Have a good day.`
 
         const hasLoadingMsg = allOptions.some(o => o.classList.contains('ember-power-select-option--loading-message'));
         if (hasLoadingMsg) {
-          // Dependent options still being loaded by Freshdesk backend, wait!
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise(r => setTimeout(r, 30));
           continue;
         }
 
@@ -4874,13 +5183,13 @@ Have a good day.`
         });
 
         if (validOptions.length === 0) {
-          await new Promise(r => setTimeout(r, 60));
+          await new Promise(r => setTimeout(r, 20));
           continue;
         }
 
         // 1. Exact match
         let match = validOptions.find(o => {
-          const t = (o.textContent || '').trim().toLowerCase();
+          const t = norm(o.textContent);
           if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
           return t === target || t.replace(/[^a-z0-9]/g, '') === targetClean;
         });
@@ -4888,7 +5197,7 @@ Have a good day.`
         // 2. Starts with / includes match
         if (!match) {
           match = validOptions.find(o => {
-            const t = (o.textContent || '').trim().toLowerCase();
+            const t = norm(o.textContent);
             if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
             return t.startsWith(target) || target.startsWith(t) || t.includes(target) || target.includes(t);
           });
@@ -4902,8 +5211,8 @@ Have a good day.`
           clickElement(match);
           matched = true;
 
-          // Allow Ember to process selection and verify trigger
-          await new Promise(r => setTimeout(r, 150));
+          // Quick wait for Ember to process selection
+          await new Promise(r => setTimeout(r, 40));
           const postTr = getTriggerFn() || trigger;
           if (isAlreadySelected(postTr)) {
             return true;
@@ -4912,7 +5221,7 @@ Have a good day.`
         }
 
         // Fallback: search input if options list is filtered
-        if (Date.now() - startFind > 600 && !searched && open) {
+        if (Date.now() - startFind > 280 && !searched && open) {
           searched = true;
           const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
           const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
@@ -4925,15 +5234,16 @@ Have a good day.`
           }
         }
 
-        await new Promise(r => setTimeout(r, 60));
+        await new Promise(r => setTimeout(r, 20));
       }
 
-      await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 35));
       const finalTr = getTriggerFn() || trigger;
       return isAlreadySelected(finalTr) || matched;
     };
 
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
+      console.log(`[Auto Fill] Start: type="${treeType}", category="${category}", detail="${detail}", subDetail="${subDetail}"`);
       const getL1 = () => getLiveLevel1Trigger(treeType);
       const getL2 = () => getLiveLevel2Trigger(treeType);
       const getL3 = () => getLiveLevel3Trigger();
@@ -4941,32 +5251,37 @@ Have a good day.`
       // 1. Business Unit -> Check if Food Aggregation is set
       const buTr = getLiveBusinessUnitTrigger();
       if (buTr) {
-        const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select');
+        const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
         const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
         if (!buText.includes('food aggregation')) {
           showToast('Setting Business unit: Food Aggregation...', 'info');
-          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 6000);
-          await new Promise(r => setTimeout(r, 400));
+          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 2500);
+          await new Promise(r => setTimeout(r, 50));
         }
       }
 
-      // 2. Type -> Complaints or Feedback
+      // 2. Type -> Complaints, Feedback, or Internal Requests
       if (treeType) {
+        const norm = (s) => (s || '').trim().toLowerCase()
+          .replace(/resturant/g, 'restaurant')
+          .replace(/requests/g, 'request')
+          .replace(/[^a-z0-9]/g, '');
+
         const curTypeTr = getLiveTypeTrigger();
-        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select') : null;
-        const curTypeText = ((curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent) || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const targetTypeClean = treeType.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const typeNeedsChange = curTypeText !== targetTypeClean;
+        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
+        const curTypeText = norm(curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent);
+        const targetTypeClean = norm(treeType);
+        const typeNeedsChange = curTypeText !== targetTypeClean && !curTypeText.includes(targetTypeClean) && !targetTypeClean.includes(curTypeText);
 
         if (typeNeedsChange) {
-          await setDropdownValue(getLiveTypeTrigger, treeType, 6000);
-          // Changing Type causes Freshdesk to re-render properties panel
-          await new Promise(r => setTimeout(r, 500));
+          console.log(`[Auto Fill] Setting Type to "${treeType}"...`);
+          await setDropdownValue(getLiveTypeTrigger, treeType, 2500);
+          // Fast-poll until L1 trigger is ready and not disabled
           const startWaitAfterType = Date.now();
-          while (Date.now() - startWaitAfterType < 4000) {
+          while (Date.now() - startWaitAfterType < 1800) {
             const l1Tr = getL1();
             if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
-            await new Promise(r => setTimeout(r, 100));
+            await new Promise(r => setTimeout(r, 20));
           }
         }
       }
@@ -4974,56 +5289,59 @@ Have a good day.`
       // 3. Category (Level 1) -> Set / change category
       if (category) {
         const curL1 = getL1();
-        const l1SelectedEl = curL1 ? curL1.querySelector('.ember-power-select-selected-item, .trigger-power-select') : null;
-        const curL1Text = ((l1SelectedEl ? l1SelectedEl.textContent : curL1?.textContent) || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const targetL1Clean = category.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-        const l1NeedsChange = curL1Text !== targetL1Clean;
-
-        await setDropdownValue(getL1, category, 8000);
+        const l1SelectedEl = curL1 ? curL1.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
+        const normL1 = (s) => (s || '').trim().toLowerCase()
+          .replace(/resturant/g, 'restaurant')
+          .replace(/requests/g, 'request')
+          .replace(/[^a-z0-9]/g, '');
+        const curL1Text = normL1(l1SelectedEl ? l1SelectedEl.textContent : curL1?.textContent);
+        const targetL1Clean = normL1(category);
+        const l1NeedsChange = !curL1Text || (curL1Text !== targetL1Clean && !curL1Text.includes(targetL1Clean) && !targetL1Clean.includes(curL1Text));
 
         if (l1NeedsChange) {
-          showToast(`Category set to "${category}". Loading details...`, 'info');
-          // Actively wait for Level 2 trigger to finish dependent reload
-          await new Promise(r => setTimeout(r, 400));
-          const startWaitL2 = Date.now();
-          while (Date.now() - startWaitL2 < 5000) {
-            const l2Tr = getL2();
-            if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
-              await new Promise(r => setTimeout(r, 350));
-              break;
+          console.log(`[Auto Fill] Setting Level 1 to "${category}"...`);
+          await setDropdownValue(getL1, category, 2500);
+          // Fast-poll for Level 2 trigger to be enabled and mounted ONLY if detail is provided
+          if (detail) {
+            const startWaitL2 = Date.now();
+            while (Date.now() - startWaitL2 < 1800) {
+              const l2Tr = getL2();
+              if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
+                await new Promise(r => setTimeout(r, 30));
+                break;
+              }
+              await new Promise(r => setTimeout(r, 20));
             }
-            await new Promise(r => setTimeout(r, 100));
           }
-        } else {
-          await new Promise(r => setTimeout(r, 200));
         }
       }
 
-      // 4. Details (Level 2) -> Set / change details (retry up to 3 times)
+      // 4. Details (Level 2) -> Set / change details
       if (detail) {
+        console.log(`[Auto Fill] Setting Level 2 to "${detail}"...`);
         let l2Ok = false;
-        for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
+        for (let attempt = 0; attempt < 2 && !l2Ok; attempt++) {
           if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, 50));
           }
-          l2Ok = await setDropdownValue(getL2, detail, 7000);
+          l2Ok = await setDropdownValue(getL2, detail, 2500);
         }
         if (!l2Ok) {
           console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
         }
-        await new Promise(r => setTimeout(r, 250));
       }
 
       // 5. Level 3 (Quality) -> if subDetail exists
       if (subDetail) {
+        console.log(`[Auto Fill] Setting Level 3 to "${subDetail}"...`);
         let l3Ok = false;
-        for (let attempt = 0; attempt < 3 && !l3Ok; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 300));
-          l3Ok = await setDropdownValue(getL3, subDetail, 6000);
+        for (let attempt = 0; attempt < 2 && !l3Ok; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 50));
+          l3Ok = await setDropdownValue(getL3, subDetail, 2000);
         }
       }
 
-      showToast(`✓ Auto Fill Complete: ${category || treeType} > ${detail}${subDetail ? ' > ' + subDetail : ''}`, 'info');
+      showToast(`✓ Auto Fill Complete: ${category || treeType}${detail ? ' > ' + detail : ''}${subDetail ? ' > ' + subDetail : ''}`, 'info');
     };
 
     const buildAutoFillSubmenu = (items, isRoot = false, path = [], depth = 0) => {
@@ -5148,7 +5466,7 @@ Have a good day.`
             const currentPath = [...path, item.label];
             const treeType = currentPath[0] || 'Complaints';
             const category = currentPath[1] || '';
-            const detail = currentPath[2] || item.label;
+            const detail = currentPath.length > 2 ? currentPath[2] : '';
             const subDetail = currentPath.length > 3 ? currentPath[3] : '';
 
             const pathLabel = currentPath.slice(1).join(' > ');
@@ -5557,8 +5875,8 @@ Have a good day.`
     const bfIsSenior = usp.get('bf_is_senior') === '1';
     const bfTreeChoice = usp.get('bf_tree_choice');
     const bfCategory = usp.get('bf_category');
-    const bfTreeType = usp.get('bf_tree_type') || (bfCategory && bfCategory.toLowerCase().includes('feedback') ? 'Feedback' : (bfTreeChoice || bfCategory ? 'Complaints' : null));
-    const bfDetail = usp.get('bf_detail') || bfTreeChoice;
+    const bfTreeType = usp.get('bf_tree_type') || (bfCategory && bfCategory.toLowerCase().includes('feedback') ? 'Feedback' : (bfCategory && bfCategory.toLowerCase().includes('internal') ? 'Internal Requests' : (bfTreeChoice || bfCategory ? 'Complaints' : null)));
+    const bfDetail = usp.get('bf_detail') || (bfTreeType && bfTreeType.toLowerCase().includes('internal') ? '' : bfTreeChoice);
     const bfSubDetail = usp.get('bf_sub_detail');
 
     if (bfUid) {
@@ -5799,7 +6117,7 @@ Have a good day.`
               if (catToApply.includes('>')) {
                 catToApply = (catToApply.split('>').pop() || '').trim();
               }
-              const detailToApply = bfDetail || bfTreeChoice || '';
+              const detailToApply = bfDetail || (bfTreeChoice !== catToApply ? bfTreeChoice : '') || '';
               const subDetailToApply = bfSubDetail || '';
 
               const ok = await applyTreeToForm(typeToApply, catToApply, detailToApply, subDetailToApply);
