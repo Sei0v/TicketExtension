@@ -69,6 +69,19 @@
     return null;
   };
 
+  const isTriggerDisabled = (tr) => {
+    if (!tr) return true;
+    if (tr.disabled || tr.hasAttribute('disabled')) return true;
+    if (tr.getAttribute('aria-disabled') === 'true') return true;
+    if (tr.classList.contains('ember-power-select-trigger--disabled')) return true;
+    if (tr.classList.contains('disabled')) return true;
+    const parent = tr.closest('.input, .__ui-form__select-field, .nested-fields, .nested-sub-fields, .nested-level-2-group, .nested-filter, [data-test-field], .form-group, .ember-view');
+    if (parent && (parent.classList.contains('disabled') || parent.classList.contains('is-loading') || parent.classList.contains('loading') || parent.getAttribute('aria-disabled') === 'true')) {
+      return true;
+    }
+    return false;
+  };
+
   const findDropdownTrigger = (fieldName) => {
     const norm = (fieldName || '').toLowerCase().trim();
 
@@ -78,10 +91,45 @@
       if (el.classList.contains('ember-power-select-trigger')) return el;
       const child = el.querySelector('.ember-power-select-trigger');
       if (child) return child;
+      if (el.nextElementSibling) {
+        if (el.nextElementSibling.classList.contains('ember-power-select-trigger')) return el.nextElementSibling;
+        const sibChild = el.nextElementSibling.querySelector('.ember-power-select-trigger');
+        if (sibChild) return sibChild;
+      }
       if (el.parentElement) {
         if (el.parentElement.classList.contains('ember-power-select-trigger')) return el.parentElement;
         const sibling = el.parentElement.querySelector('.ember-power-select-trigger');
         if (sibling) return sibling;
+        const container = el.closest('.input, .form-group, .field, [data-test-field], .ember-view, .nested-sub-fields, .nested-fields');
+        if (container) {
+          const cTr = container.querySelector('.ember-power-select-trigger');
+          if (cTr) return cTr;
+        }
+      }
+      return null;
+    };
+
+    // Helper to search candidate selectors prioritizing visible and enabled triggers
+    const pickBestTrigger = (selectors, excludeTr = null) => {
+      for (const sel of selectors) {
+        const els = Array.from(document.querySelectorAll(sel));
+        for (const el of els) {
+          const tr = getTriggerFrom(el);
+          if (tr && document.body.contains(tr) && tr !== excludeTr) {
+            if (!isTriggerDisabled(tr) && isElementVisible(tr)) {
+              return tr;
+            }
+          }
+        }
+      }
+      for (const sel of selectors) {
+        const els = Array.from(document.querySelectorAll(sel));
+        for (const el of els) {
+          const tr = getTriggerFrom(el);
+          if (tr && document.body.contains(tr) && tr !== excludeTr) {
+            return tr;
+          }
+        }
       }
       return null;
     };
@@ -318,67 +366,74 @@
     // 4. Complaint Category (Level 1)
     if (norm === 'complaint category' || (norm.includes('complaint') && (norm.includes('category') || norm.includes('cat'))) || norm === 'category') {
       const selectors = [
-        '[data-test-id*="complaint_category" i]',
-        '[data-test-id*="complaint category" i]',
-        '[data-test-id*="cf_complaint_category" i]',
         '[data-test-id*="cf_complaint_category_food_agg" i]',
-        '[data-test-id*="tkt-properties-cf_complaint_category" i]',
+        '[data-test-id*="complaint_category_food_agg" i]',
+        '[title*="Complaint Category Food Agg" i]',
+        '[data-test-id*="cf_complaint_category" i]:not([data-test-id*="buddy" i])',
+        '[data-test-id*="complaint_category" i]:not([data-test-id*="buddy" i])',
+        '[data-test-id*="complaint category" i]:not([data-test-id*="buddy" i])',
+        '[data-test-id*="tkt-properties-cf_complaint_category" i]:not([data-test-id*="buddy" i])',
+        '[title*="Complaint Category" i]:not([title*="Buddy" i])',
         '[data-test-id="level-1" i]',
         '[data-test-id*="level-1" i]',
-        '[data-test-id*="level_1" i]',
-        '[title*="Complaint Category Food Agg" i]',
-        '[title*="Complaint Category" i]'
+        '[data-test-id*="level_1" i]'
       ];
-      for (const sel of selectors) {
-        const tr = getTriggerFrom(document.querySelector(sel));
-        if (tr && document.body.contains(tr)) return tr;
-      }
-      const labelTr = getTriggerByLabel(/complaint\s*category|^category$/i);
+      const tr = pickBestTrigger(selectors);
+      if (tr) return tr;
+
+      const labelTr = getTriggerByLabel(/complaint\s*category.*food\s*agg/i) ||
+                      getTriggerByLabel(/complaint\s*category|^category$/i);
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
     // 5. Complaint Details (Level 2)
     if (norm === 'complaint details' || norm === 'complaint detail' || (norm.includes('complaint') && (norm.includes('detail') || norm.includes('sub'))) || norm === 'detail' || norm === 'details' || norm.includes('sub_category') || norm.includes('subcategory')) {
+      const l1Tr = findDropdownTrigger('Complaint Category');
       const selectors = [
         '[data-test-id*="Complaint Details Food Agg" i]',
         '[data-test-id*="complaint_details_food_agg" i]',
-        '[data-test-id*="complaint_details" i]',
-        '[data-test-id*="complaint details" i]',
-        '[data-test-id*="cf_complaint_details" i]',
-        '[data-test-id*="sub_category" i]',
-        '[data-test-id*="subcategory" i]',
-        '[data-test-id*="sub-category" i]',
-        '[data-test-id*="cf_sub_category" i]',
+        '[data-test-id*="cf_complaint_details_food_agg" i]',
+        '[title*="Complaint Details Food Agg" i]',
+        '.nested-sub-fields [data-test-id="level-2"]',
+        '.nested-fields [data-test-id="level-2"]',
         '[data-test-id="level-2" i]',
         '[data-test-id*="level-2" i]',
         '[data-test-id*="level_2" i]',
-        '.nested-sub-fields [data-test-id*="level-2" i]',
-        '[title*="Complaint Details Food Agg" i]',
-        '[title*="Complaint Details" i]',
+        '[data-test-id*="complaint_details" i]:not([data-test-id*="buddy" i])',
+        '[data-test-id*="complaint details" i]:not([data-test-id*="buddy" i])',
+        '[data-test-id*="cf_complaint_details" i]:not([data-test-id*="buddy" i])',
+        '[title*="Complaint Details" i]:not([title*="Buddy" i])',
         '[title*="Sub Category" i]',
-        '[title*="Sub-category" i]',
+        '[data-test-id*="sub_category" i]',
+        '[data-test-id*="cf_sub_category" i]',
         '[title*="Details" i]'
       ];
-      for (const sel of selectors) {
-        const tr = getTriggerFrom(document.querySelector(sel));
-        if (tr && document.body.contains(tr)) return tr;
-      }
+      const tr = pickBestTrigger(selectors, l1Tr);
+      if (tr) return tr;
 
       // Check 2nd trigger in nested field containers if present
-      const nestedContainer = document.querySelector('.nested-sub-fields, .nested-field-group, [data-test-id*="nested" i]');
+      const nestedContainer = document.querySelector('.nested-sub-fields, .nested-fields, .nested-field-group, [data-test-id*="nested" i]');
       if (nestedContainer) {
         const triggers = Array.from(nestedContainer.querySelectorAll('.ember-power-select-trigger'));
-        if (triggers.length >= 2 && document.body.contains(triggers[1])) {
+        if (triggers.length >= 2 && triggers[1] !== l1Tr && document.body.contains(triggers[1])) {
           return triggers[1];
         }
       }
 
-      const labelTr = getTriggerByLabel(/complaint\s*detail|sub\s*category|subcategory|sub-category|^details?$|^issue$/i);
-      if (labelTr && document.body.contains(labelTr)) return labelTr;
+      const labelTr = getTriggerByLabel(/complaint\s*detail.*food\s*agg/i) ||
+                      getTriggerByLabel(/complaint\s*detail|sub\s*category|subcategory|sub-category|^details?$|^issue$/i);
+      if (labelTr && document.body.contains(labelTr) && labelTr !== l1Tr) return labelTr;
+
+      if (l1Tr) {
+        const nextTr = getDropdownFollowing(l1Tr);
+        if (nextTr && nextTr !== l1Tr && document.body.contains(nextTr)) return nextTr;
+      }
     }
 
     // 6. Quality (Level 3 - Dependent on Products Quality)
     if (norm === 'quality' || norm.includes('quality') || norm.includes('level-3') || norm.includes('level_3')) {
+      const l1Tr = findDropdownTrigger('Complaint Category');
+      const l2Tr = findDropdownTrigger('Complaint Details');
       const selectors = [
         '[data-test-id*="quality" i]',
         '[data-test-id="level-3" i]',
@@ -388,21 +443,24 @@
         '[title*="Quality" i]'
       ];
       for (const sel of selectors) {
-        const tr = getTriggerFrom(document.querySelector(sel));
-        if (tr && document.body.contains(tr)) return tr;
+        const els = Array.from(document.querySelectorAll(sel));
+        for (const el of els) {
+          const tr = getTriggerFrom(el);
+          if (tr && document.body.contains(tr) && tr !== l1Tr && tr !== l2Tr) return tr;
+        }
       }
 
       // Check 3rd trigger in nested field containers if present
       const nestedContainer = document.querySelector('.nested-sub-fields, .nested-field-group, [data-test-id*="nested" i]');
       if (nestedContainer) {
         const triggers = Array.from(nestedContainer.querySelectorAll('.ember-power-select-trigger'));
-        if (triggers.length >= 3 && document.body.contains(triggers[2])) {
+        if (triggers.length >= 3 && document.body.contains(triggers[2]) && triggers[2] !== l1Tr && triggers[2] !== l2Tr) {
           return triggers[2];
         }
       }
 
       const labelTr = getTriggerByLabel(/^quality$/i);
-      if (labelTr && document.body.contains(labelTr)) return labelTr;
+      if (labelTr && document.body.contains(labelTr) && labelTr !== l1Tr && labelTr !== l2Tr) return labelTr;
     }
 
     // 7. Business Unit
@@ -486,23 +544,33 @@
     const targetClean = target.replace(/[^a-z0-9]/g, '');
     if (!targetClean) return false;
 
-    // Check selected item container
-    const selectedItem = trigger.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
-    if (selectedItem) {
-      const cur = norm(selectedItem.textContent);
-      const curClean = cur.replace(/[^a-z0-9]/g, '');
-      if (curClean && curClean !== 'any' && (cur === target || curClean === targetClean || (curClean.length >= 4 && targetClean.length >= 4 && (curClean.includes(targetClean) || targetClean.includes(curClean) || curClean.startsWith(targetClean) || targetClean.startsWith(curClean))))) {
-        return true;
+    const isMatch = (rawText) => {
+      const cur = norm(rawText);
+      if (!cur || cur === '--' || cur === 'any' || cur.startsWith('select') || cur.includes('choose')) {
+        return false;
       }
+      const curClean = cur.replace(/[^a-z0-9]/g, '');
+      if (!curClean || curClean === 'any') return false;
+
+      // Exact match or alphanumeric normalized match
+      if (cur === target || curClean === targetClean) return true;
+
+      // Compound segment matches (e.g. "Over cooked / burnt" vs "Over cooked")
+      const segments = cur.split(/[/\\&>-]/).map(p => p.trim().replace(/[^a-z0-9]/g, ''));
+      if (segments.some(p => p === targetClean)) return true;
+
+      return false;
+    };
+
+    // Check selected item container
+    const selectedItem = trigger.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string, [data-test-id*="selected-item"]');
+    if (selectedItem && isMatch(selectedItem.textContent)) {
+      return true;
     }
 
     // Check trigger text
-    const fullText = norm(trigger.textContent);
-    if (fullText && fullText !== '--' && fullText !== 'any' && !fullText.startsWith('select') && !fullText.includes('choose')) {
-      const fullClean = fullText.replace(/[^a-z0-9]/g, '');
-      if (fullClean && fullClean !== 'any' && (fullText === target || fullClean === targetClean || (fullClean.length >= 4 && targetClean.length >= 4 && (fullClean.includes(targetClean) || targetClean.includes(fullClean) || fullClean.startsWith(targetClean) || targetClean.startsWith(fullClean))))) {
-        return true;
-      }
+    if (isMatch(trigger.textContent)) {
+      return true;
     }
 
     return false;
@@ -515,20 +583,6 @@
       if (document.activeElement && document.activeElement !== document.body) {
         document.activeElement.blur();
       }
-    } catch (e) { }
-
-    try {
-      ['keydown', 'keyup'].forEach(type => {
-        document.dispatchEvent(new KeyboardEvent(type, {
-          bubbles: true,
-          cancelable: true,
-          key: 'Escape',
-          code: 'Escape',
-          keyCode: 27,
-          which: 27,
-          view: window
-        }));
-      });
     } catch (e) { }
 
     try {
@@ -545,19 +599,6 @@
         }));
       });
     } catch (e) { }
-
-    try {
-      document.querySelectorAll('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed)').forEach(c => {
-        c.classList.add('ember-basic-dropdown-content--closed');
-      });
-      document.querySelectorAll('.ember-power-select-trigger[aria-expanded="true"]').forEach(tr => {
-        tr.setAttribute('aria-expanded', 'false');
-        tr.classList.remove('ember-basic-dropdown-trigger--expanded', 'ember-power-select-trigger--active');
-      });
-      document.querySelectorAll('.ember-basic-dropdown-overlay').forEach(ov => {
-        try { ov.remove(); } catch (e) { }
-      });
-    } catch (e) { }
   };
 
   const assertDropdown = async (fieldName, optionText, maxWaitMs = 6000) => {
@@ -568,10 +609,10 @@
 
     const startTime = Date.now();
 
-    // Helper to get active, mounted trigger from DOM
+    // Helper to get active, mounted, and ENABLED trigger from DOM
     const getLiveTrigger = () => {
       const tr = findDropdownTrigger(fieldName);
-      if (tr && document.body.contains(tr) && !tr.disabled && tr.getAttribute('aria-disabled') !== 'true') {
+      if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) {
         return tr;
       }
       return null;
@@ -583,13 +624,16 @@
       if (isAborted()) return false;
       trigger = getLiveTrigger();
       if (trigger) break;
-      await new Promise(r => setTimeout(r, 30));
+      await new Promise(r => setTimeout(r, 40));
     }
 
     if (isAborted()) return false;
     if (!trigger) {
-      console.log(`[BF Extension] Trigger "${fieldName}" not available or disabled.`);
-      return false;
+      trigger = findDropdownTrigger(fieldName);
+      if (!trigger || !document.body.contains(trigger)) {
+        console.log(`[BF Extension] Trigger "${fieldName}" not available.`);
+        return false;
+      }
     }
 
     // 2. Already selected?
@@ -598,9 +642,21 @@
     }
 
     const mouseClick = (el) => {
-      ['mousedown', 'mouseup', 'click'].forEach(type => {
-        el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+      if (!el) return;
+      ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(type => {
+        try {
+          el.dispatchEvent(new MouseEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            view: window,
+            button: 0,
+            buttons: type.includes('down') ? 1 : 0
+          }));
+        } catch (e) { }
       });
+      try {
+        if (typeof el.click === 'function') el.click();
+      } catch (e) { }
     };
 
     const isDropdownOpen = (tr) => {
@@ -736,25 +792,71 @@
             } catch (e) { }
           }
           try { matched.scrollIntoView({ block: 'nearest' }); } catch (e) { }
+
+          // Dispatch full pointer and mouse events
           mouseClick(matched);
-          setTimeout(() => {
-            resolve(isDropdownSelected(trigger, optionText) || true);
-          }, 80);
+
+          // If there is an active search input, press Enter and blur to ensure Ember commits
+          const sInp = (trigger ? trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') : null) ||
+                       (activeContent ? activeContent.querySelector('input.ember-power-select-search-input, input') : null);
+          if (sInp) {
+            try {
+              sInp.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+              sInp.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+            } catch (e) { }
+            setTimeout(() => {
+              try { sInp.blur(); } catch (e) { }
+            }, 60);
+          }
+
+          // Actively poll to verify Ember has registered and committed the selection
+          const confirmStart = Date.now();
+          const pollConfirmation = () => {
+            const freshTr = getLiveTrigger() || trigger;
+            const isSel = isDropdownSelected(freshTr, optionText) ||
+                          (matched && (matched.getAttribute('aria-selected') === 'true' || matched.classList.contains('ember-power-select-option--selected')));
+            if (isSel) {
+              resolve(true);
+              return;
+            }
+            if (Date.now() - confirmStart < 800) {
+              if (Date.now() - confirmStart > 320 && Date.now() - confirmStart < 370) {
+                mouseClick(matched);
+                if (sInp) {
+                  try {
+                    sInp.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+                    sInp.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+                  } catch (e) { }
+                }
+              }
+              setTimeout(pollConfirmation, 40);
+            } else {
+              const finalTr = getLiveTrigger() || trigger;
+              resolve(isDropdownSelected(finalTr, optionText));
+            }
+          };
+          setTimeout(pollConfirmation, 40);
           return;
         }
 
-        // If not found after ~210ms, try typing in search input (in trigger or dropdown content)
-        if (attempts > 6 && !searched && currentlyOpen) {
+        // If not found after ~180ms, try typing in search input (in trigger or dropdown content)
+        if (attempts > 5 && !searched && currentlyOpen) {
           searched = true;
-          const searchInput = trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') ||
+          const searchInput = (trigger ? trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') : null) ||
                               (activeContent ? activeContent.querySelector('input.ember-power-select-search-input, input') : null);
           if (searchInput) {
             try { searchInput.focus(); } catch (e) { }
             const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
             if (nativeSetter) nativeSetter.call(searchInput, optionText);
             else searchInput.value = optionText;
-            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+            searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            searchInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+            for (let i = 0; i < optionText.length; i++) {
+              const ch = optionText[i];
+              searchInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ch }));
+              searchInput.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, key: ch }));
+              searchInput.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ch }));
+            }
           }
         }
 
@@ -913,34 +1015,97 @@
       }
       if (isAborted()) return false;
 
-      // 2. Set Type (Complaints or Feedback)
+      // 2. Set Type (Complaints, Feedback, or Internal Requests)
       if (treeType) {
-        await assertDropdown('Type', treeType, 6000);
-        await new Promise(r => setTimeout(r, 180));
+        const typeTr = findDropdownTrigger('Type');
+        const typeNeedsChange = !typeTr || !isDropdownSelected(typeTr, treeType);
+        if (typeNeedsChange) {
+          console.log(`[BF Extension] Setting Type to "${treeType}"...`);
+          await assertDropdown('Type', treeType, 6000);
+          if (isAborted()) return false;
+          // Wait for Ember to re-render properties after Type change
+          await new Promise(r => setTimeout(r, 400));
+          if (isAborted()) return false;
+        }
       }
 
-      // 3. Set Category and Details
+      // 3. Set Category and Details based on treeType
       if ((treeType || '').toLowerCase().includes('complaint')) {
+        // Wait for Level 1 trigger (Complaint Category Food Agg) to be ready and enabled
+        const waitL1Start = Date.now();
+        while (Date.now() - waitL1Start < 3500) {
+          if (isAborted()) return false;
+          const l1Tr = findDropdownTrigger('Complaint Category');
+          if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
+          await new Promise(r => setTimeout(r, 50));
+        }
+        if (isAborted()) return false;
+
         if (category) {
-          await assertDropdown('Complaint Category', category, 6000);
-          await new Promise(r => setTimeout(r, 220));
+          const curL1 = findDropdownTrigger('Complaint Category');
+          const l1NeedsChange = !curL1 || !isDropdownSelected(curL1, category);
+          if (l1NeedsChange) {
+            console.log(`[BF Extension] Setting Complaint Category to "${category}"...`);
+            let catOk = false;
+            for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
+              if (isAborted()) return false;
+              if (attempt > 0) await new Promise(r => setTimeout(r, 300));
+              catOk = await assertDropdown('Complaint Category', category, 6000);
+            }
+            if (isAborted()) return false;
+            // CRITICAL: Freshdesk Ember fires an AJAX request upon category selection
+            // to fetch dependent options for Complaint Details Food Agg.
+            // We must wait for Ember to process this change.
+            await new Promise(r => setTimeout(r, 400));
+            if (isAborted()) return false;
+          }
         }
 
+        // Wait for Level 2 trigger (Complaint Details Food Agg) to be ready and enabled
         if (detail) {
+          const waitL2Start = Date.now();
+          while (Date.now() - waitL2Start < 4000) {
+            if (isAborted()) return false;
+            const l2Tr = findDropdownTrigger('Complaint Details');
+            if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
+              await new Promise(r => setTimeout(r, 120));
+              break;
+            }
+            await new Promise(r => setTimeout(r, 50));
+          }
+          if (isAborted()) return false;
+
+          console.log(`[BF Extension] Setting Complaint Details to "${detail}"...`);
           let detailOk = false;
-          for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
+          for (let attempt = 0; attempt < 4 && !detailOk; attempt++) {
+            if (isAborted()) return false;
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 250));
+              await new Promise(r => setTimeout(r, 300));
             }
             detailOk = await assertDropdown('Complaint Details', detail, 6000);
           }
+
           if (subDetail) {
-            await new Promise(r => setTimeout(r, 180));
+            await new Promise(r => setTimeout(r, 250));
+            if (isAborted()) return false;
+            const waitL3Start = Date.now();
+            while (Date.now() - waitL3Start < 3000) {
+              if (isAborted()) return false;
+              const l3Tr = findDropdownTrigger('Quality');
+              if (l3Tr && document.body.contains(l3Tr) && !isTriggerDisabled(l3Tr)) break;
+              await new Promise(r => setTimeout(r, 50));
+            }
+            if (isAborted()) return false;
             await assertDropdown('Quality', subDetail, 6000);
           }
+
           if (isNewTicketPage) {
             setTicketSubject(category, detail, subDetail);
           }
+
+          // Allow Ember run-loop to commit model changes before returning
+          await new Promise(r => setTimeout(r, 300));
+
           if (detailOk) {
             showToast(`✓ [Complaints] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
             return true;
@@ -970,14 +1135,21 @@
 
         if (fbType) {
           let fbTypeOk = false;
-          for (let attempt = 0; attempt < 2 && !fbTypeOk; attempt++) {
+          for (let attempt = 0; attempt < 3 && !fbTypeOk; attempt++) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 200));
             fbTypeOk = await assertDropdown('Feedback Type', fbType, 5000);
           }
-          await new Promise(r => setTimeout(r, 250));
+          await new Promise(r => setTimeout(r, 300));
         }
 
         if (fbCategory) {
+          const waitFbCat = Date.now();
+          while (Date.now() - waitFbCat < 3000) {
+            if (isAborted()) return false;
+            const tr = findDropdownTrigger('Feedback') || findDropdownTrigger('Feedback Category');
+            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
+            await new Promise(r => setTimeout(r, 50));
+          }
           let catOk = false;
           for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 250));
@@ -986,10 +1158,17 @@
               catOk = await assertDropdown('Feedback Category', fbCategory, 3000);
             }
           }
-          await new Promise(r => setTimeout(r, 250));
+          await new Promise(r => setTimeout(r, 300));
         }
 
         if (fbDetails) {
+          const waitFbDet = Date.now();
+          while (Date.now() - waitFbDet < 3000) {
+            if (isAborted()) return false;
+            const tr = findDropdownTrigger('Feedback Details');
+            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
+            await new Promise(r => setTimeout(r, 50));
+          }
           let detOk = false;
           for (let attempt = 0; attempt < 3 && !detOk; attempt++) {
             if (attempt > 0) await new Promise(r => setTimeout(r, 250));
@@ -1000,32 +1179,38 @@
         if (isNewTicketPage) {
           setTicketSubject(category, detail, subDetail);
         }
+        await new Promise(r => setTimeout(r, 300));
         showToast(`✓ [Feedback] ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''} applied!`, 'info');
         return true;
       } else if ((treeType || '').toLowerCase().includes('internal')) {
         if (category) {
           let catOk = false;
-          for (let cTry = 0; cTry < 2 && !catOk; cTry++) {
-            if (cTry > 0) await new Promise(r => setTimeout(r, 40));
-            // Exact Freshdesk UI field: "Internal Request Type"
-            catOk = await assertDropdown('Internal Request Type', category, 2500);
+          for (let cTry = 0; cTry < 3 && !catOk; cTry++) {
+            if (cTry > 0) await new Promise(r => setTimeout(r, 200));
+            catOk = await assertDropdown('Internal Request Type', category, 3000);
             if (!catOk) {
-              catOk = await assertDropdown('Internal Request Category', category, 1200);
+              catOk = await assertDropdown('Internal Request Category', category, 2000);
             }
           }
-          await new Promise(r => setTimeout(r, 40));
+          await new Promise(r => setTimeout(r, 300));
         }
 
         if (detail) {
+          const waitIntDet = Date.now();
+          while (Date.now() - waitIntDet < 3000) {
+            if (isAborted()) return false;
+            const tr = findDropdownTrigger('Internal Request') || findDropdownTrigger('Internal Request Details');
+            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
+            await new Promise(r => setTimeout(r, 50));
+          }
           let detailOk = false;
-          for (let attempt = 0; attempt < 2 && !detailOk; attempt++) {
+          for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 40));
+              await new Promise(r => setTimeout(r, 250));
             }
-            // Exact Freshdesk UI field: "Internal Request"
-            detailOk = await assertDropdown('Internal Request', detail, 2500);
+            detailOk = await assertDropdown('Internal Request', detail, 3000);
             if (!detailOk) {
-              detailOk = await assertDropdown('Internal Request Details', detail, 1200);
+              detailOk = await assertDropdown('Internal Request Details', detail, 2000);
             }
           }
         }
@@ -1033,6 +1218,7 @@
         if (isNewTicketPage) {
           setTicketSubject(category, detail, subDetail);
         }
+        await new Promise(r => setTimeout(r, 300));
         showToast(`✓ [Internal Requests] ${category}${detail ? ' > ' + detail : ''} applied!`, 'info');
         return true;
       }
@@ -1046,10 +1232,8 @@
     activeTreePromise = run();
     try {
       const res = await activeTreePromise;
-      closeHangingDropdowns();
       return res;
     } finally {
-      closeHangingDropdowns();
       activeTreePromise = null;
     }
   };
@@ -1110,6 +1294,41 @@
   try {
     window.bfResetExtension = resetExtensionTool;
   } catch (e) { }
+
+  // =========================================================================
+  // Breadfast Order Number Validation & Normalization Engine
+  // Strictly enforces format: 2909-093154060 (4 digits - 5 to 14 digits)
+  // Strictly rejects Freshdesk Ticket IDs (e.g. 17738101) and plain numbers
+  // =========================================================================
+  function normalizeOrderNumber(val) {
+    if (!val || typeof val !== 'string') return '';
+    const m = val.match(/(?<!\d)(\d{4})\s*[-–—]\s*(\d{5,14})(?!\d)/);
+    return m ? `${m[1]}-${m[2]}` : '';
+  }
+
+  function isValidOrderNumber(val) {
+    if (!val || typeof val !== 'string') return false;
+    const normalized = normalizeOrderNumber(val);
+    if (!normalized) return false;
+    if (!/^\d{4}-\d{5,14}$/.test(normalized)) return false;
+    // Strictly prevent ticket IDs (like 17738101) from matching
+    const curMatch = window.location.pathname.match(/\/a\/tickets\/(\d+)/);
+    const curTicketId = curMatch ? curMatch[1] : (new URLSearchParams(window.location.search).get('ticket_id') || null);
+    if (curTicketId && (normalized === curTicketId || normalized.replace('-', '') === curTicketId)) {
+      return false;
+    }
+    return true;
+  }
+
+  function extractOrderPattern(text) {
+    if (!text || typeof text !== 'string') return null;
+    const m = text.match(/(?<!\d)(\d{4})\s*[-–—]\s*(\d{5,14})(?!\d)/);
+    if (m) {
+      const candidate = `${m[1]}-${m[2]}`;
+      if (isValidOrderNumber(candidate)) return candidate;
+    }
+    return null;
+  }
 
   function ensureButtons() {
     if (!document.body) return;
@@ -1608,13 +1827,11 @@
     }
 
     function scanOrderNumberFromDom() {
-      // 1. Check document.title (Freshdesk tab title: "#123456 : Order 2809-123456 - Freshdesk")
+      // 1. Check document.title (Freshdesk tab title: "#17738101 : Order 2909-093154060 - Freshdesk")
       // document.title NEVER unmounts or scrolls away!
       if (document.title) {
-        const mHyphen = document.title.match(/\b(\d{4}-\d{6,})\b/);
-        if (mHyphen) return mHyphen[1];
-        const mWord = document.title.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
-        if (mWord) return mWord[1];
+        const found = extractOrderPattern(document.title);
+        if (found) return found;
       }
 
       // 2. Check ticket title / subject in header & sticky header outside conversation
@@ -1625,10 +1842,8 @@
 
       for (const h of headerEls) {
         const text = (h.textContent || '').trim();
-        const mHyphen = text.match(/\b(\d{4}-\d{6,})\b/);
-        if (mHyphen) return mHyphen[1];
-        const mWord = text.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
-        if (mWord) return mWord[1];
+        const found = extractOrderPattern(text);
+        if (found) return found;
       }
 
       // 3. Look for order number input fields (e.g. edit mode or custom field) outside conversation
@@ -1638,11 +1853,8 @@
 
       for (const input of inputs) {
         if (input && input.value) {
-          const val = input.value.trim();
-          const mHyphen = val.match(/\b(\d{4}-\d{6,})\b/);
-          if (mHyphen) return mHyphen[1];
-          const mDigits = val.match(/\b([1-9]\d{7,13})\b/);
-          if (mDigits) return mDigits[1];
+          const found = extractOrderPattern(input.value);
+          if (found) return found;
         }
       }
 
@@ -1653,12 +1865,8 @@
 
       for (const el of testIdEls) {
         const text = (el.textContent || '').trim();
-        const mHyphen = text.match(/\b(\d{4}-\d{6,})\b/);
-        if (mHyphen) return mHyphen[1];
-        const mWord = text.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
-        if (mWord) return mWord[1];
-        const mDigits = text.match(/\b([1-9]\d{7,13})\b/);
-        if (mDigits) return mDigits[1];
+        const found = extractOrderPattern(text);
+        if (found) return found;
       }
 
       // 5. Search sidebar labels and values specifically
@@ -1673,10 +1881,8 @@
             const container = label.closest('.field-container, .form-group, tr, div') || label.parentElement;
             if (container) {
               const cText = (container.textContent || '').trim();
-              const mHyphen = cText.match(/\b(\d{4}-\d{6,})\b/);
-              if (mHyphen) return mHyphen[1];
-              const mDigits = cText.match(/\b([1-9]\d{7,13})\b/);
-              if (mDigits) return mDigits[1];
+              const found = extractOrderPattern(cText);
+              if (found) return found;
             }
           }
         }
@@ -1686,8 +1892,8 @@
       try {
         const orderLink = findOrderLink();
         if (orderLink) {
-          const m = orderLink.match(/[?&]post=(\d{7,14})/i) || orderLink.match(/[?&]orderId=(\d{7,14})/i);
-          if (m && m[1]) return m[1];
+          const found = extractOrderPattern(orderLink);
+          if (found) return found;
         }
       } catch (e) { }
 
@@ -1695,10 +1901,16 @@
       const firstDesc = document.querySelector('.ticket-description, article.conversation-item:first-child, [data-test-id="initial-message"]');
       if (firstDesc) {
         const txt = (firstDesc.textContent || '').trim();
-        const mHyphen = txt.match(/\b(\d{4}-\d{6,})\b/);
-        if (mHyphen) return mHyphen[1];
-        const mWord = txt.match(/(?:order|order#|order\s*id|order\s*no|order\s*#|طلب|اوردر|أوردر)\s*[:#\-\s]?\s*(\d{4}-\d{6,}|\d{7,14})\b/i);
-        if (mWord) return mWord[1];
+        const found = extractOrderPattern(txt);
+        if (found) return found;
+      }
+
+      // 8. General search in custom fields outside conversation
+      const customFieldEls = Array.from(document.querySelectorAll('.ticket-fields, .custom-fields, [data-test-id*="custom-field"]'))
+        .filter(el => !isInsideConversation(el));
+      for (const el of customFieldEls) {
+        const found = extractOrderPattern(el.textContent || '');
+        if (found) return found;
       }
 
       return null;
@@ -1706,7 +1918,7 @@
 
     function extractOrderNumber(useCache = true) {
       const live = scanOrderNumberFromDom();
-      if (live) {
+      if (live && isValidOrderNumber(live)) {
         const curId = getCurrentTicketId();
         if (curId && ticketDataCache.ticketId === curId) {
           ticketDataCache.orderNumber = live;
@@ -1714,7 +1926,7 @@
         return live;
       }
 
-      if (useCache && ticketDataCache.orderNumber) {
+      if (useCache && ticketDataCache.orderNumber && isValidOrderNumber(ticketDataCache.orderNumber)) {
         return ticketDataCache.orderNumber;
       }
 
@@ -1798,9 +2010,10 @@
         resetTicketCache(curId);
       }
 
-      if (!ticketDataCache.orderNumber) {
+      if (!ticketDataCache.orderNumber || !isValidOrderNumber(ticketDataCache.orderNumber)) {
         const o = scanOrderNumberFromDom();
-        if (o) ticketDataCache.orderNumber = o;
+        if (o && isValidOrderNumber(o)) ticketDataCache.orderNumber = o;
+        else ticketDataCache.orderNumber = null;
       }
       if (!ticketDataCache.customerId) {
         const c = scanCustomerIdFromDom();
@@ -1854,7 +2067,7 @@
 
       const appendParams = (url) => {
         let res = url;
-        if (orderNumber) res += `&bf_order_number=${encodeURIComponent(orderNumber)}`;
+        if (orderNumber && isValidOrderNumber(orderNumber)) res += `&bf_order_number=${encodeURIComponent(orderNumber)}`;
         if (deliveryBy) res += `&bf_delivery_by=${encodeURIComponent(deliveryBy)}`;
         if (isSenior) res += `&bf_is_senior=1`;
         for (const [k, v] of Object.entries(extraParams)) {
@@ -3925,6 +4138,7 @@ Have a good day.`
       const rawCustName = (custInfo && custInfo.name) ? custInfo.name.trim() : '';
       let custName = getFirstName(rawCustName);
       let orderNo = extractOrderNumber() || '';
+      if (!isValidOrderNumber(orderNo)) orderNo = '';
       let agentName = '';
       try {
         agentName = localStorage.getItem('bf_agent_name') || '';
@@ -4036,7 +4250,7 @@ Have a good day.`
         </div>
         <div style="display:flex; flex-direction:column; gap:4px;">
           <label style="font-size:11px; font-weight:600; color:#cbd5e1;">Order Number:</label>
-          <input type="text" id="bf-email-order-no" class="bf-email-input" value="${orderNo.replace(/"/g, '&quot;')}" placeholder="e.g. 2809-123456" />
+          <input type="text" id="bf-email-order-no" class="bf-email-input" value="${orderNo.replace(/"/g, '&quot;')}" placeholder="e.g. 2909-093154060" />
         </div>
         <div style="display:flex; flex-direction:column; gap:4px;">
           <label style="font-size:11px; font-weight:600; color:#cbd5e1;">Agent Name (YY):</label>
@@ -4337,7 +4551,7 @@ Have a good day.`
         const rawName = (freshCust && freshCust.name) ? freshCust.name.trim() : '';
 
         custNameInput.value = getFirstName(rawName);
-        orderNoInput.value = freshOrder || '';
+        orderNoInput.value = (freshOrder && isValidOrderNumber(freshOrder)) ? freshOrder : '';
 
         // Recalculate Cairo Time & Greeting
         const freshCairo = getCairoData();
@@ -4470,8 +4684,8 @@ Have a good day.`
 
     rmsBtn.addEventListener('click', () => {
       const orderNumber = extractOrderNumber();
-      if (!orderNumber) {
-        showToast('Could not find Order Number on this ticket.', 'error');
+      if (!orderNumber || !isValidOrderNumber(orderNumber)) {
+        showToast('Could not find a valid Order Number (format: 2909-093154060).', 'error');
         return;
       }
       const rmsUrl = `https://food-rms.breadfast.com/orders/list?page=1&limit=10&sortBy=placedAt&sortOrder=desc&search=${encodeURIComponent(orderNumber)}&searchBy=orderNumber&bf_autoclick=1`;
@@ -5797,256 +6011,10 @@ Have a good day.`
     };
 
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
-      const myToken = currentAutomationToken;
-      const isAborted = () => myToken !== currentAutomationToken;
-      if (isAborted()) return;
-
-      console.log(`[Auto Fill] Start: type="${treeType}", category="${category}", detail="${detail}", subDetail="${subDetail}"`);
-
-      // Dedicated Feedback Auto Fill flow (Type -> Feedback Type -> Feedback -> Feedback Details)
-      if ((treeType || '').toLowerCase().includes('feedback')) {
-        let fbType = '';
-        let fbCategory = '';
-        let fbDetails = subDetail || '';
-
-        const catLow = (category || '').toLowerCase();
-        const detLow = (detail || '').toLowerCase();
-
-        if (['negative', 'positive', 'neutral'].includes(catLow)) {
-          fbType = category;
-          fbCategory = detail;
-        } else if (['negative', 'positive', 'neutral'].includes(detLow)) {
-          fbType = detail;
-          fbCategory = category;
-        } else {
-          fbType = category;
-          fbCategory = detail;
-        }
-
-        // 1. Business Unit -> Check if Food Aggregation is set
-        const buTr = getLiveBusinessUnitTrigger();
-        if (buTr) {
-          const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
-          const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
-          if (!buText.includes('food aggregation')) {
-            showToast('Setting Business unit: Food Aggregation...', 'info');
-            await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 3000);
-            if (isAborted()) return;
-            await new Promise(r => setTimeout(r, 150));
-            if (isAborted()) return;
-          }
-        }
-
-        // 2. Type -> Feedback
-        const curTypeTr = getLiveTypeTrigger();
-        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
-        const curTypeText = ((curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent) || '').trim().toLowerCase();
-        if (!curTypeText.includes('feedback')) {
-          console.log('[Auto Fill] Setting Type to "Feedback"...');
-          await setDropdownValue(getLiveTypeTrigger, 'Feedback', 3000);
-          if (isAborted()) return;
-          await new Promise(r => setTimeout(r, 250));
-          if (isAborted()) return;
-        }
-
-        // 3. Feedback Type -> Negative / Positive / Neutral
-        if (fbType) {
-          console.log(`[Auto Fill] Setting Feedback Type to "${fbType}"...`);
-          await setDropdownValue(getLiveFeedbackTypeTrigger, fbType, 3000);
-          if (isAborted()) return;
-          await new Promise(r => setTimeout(r, 200));
-          if (isAborted()) return;
-        }
-
-        // 4. Feedback -> Products Quality, CX agent, etc.
-        if (fbCategory) {
-          console.log(`[Auto Fill] Setting Feedback to "${fbCategory}"...`);
-          const startWaitL1 = Date.now();
-          while (Date.now() - startWaitL1 < 2500) {
-            if (isAborted()) return;
-            const tr = getLiveFeedbackCategoryTrigger();
-            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
-            await new Promise(r => setTimeout(r, 40));
-          }
-          if (isAborted()) return;
-          let catOk = await setDropdownValue(getLiveFeedbackCategoryTrigger, fbCategory, 3000);
-          if (isAborted()) return;
-          if (!catOk) {
-            await new Promise(r => setTimeout(r, 150));
-            if (isAborted()) return;
-            catOk = await setDropdownValue(getLiveFeedbackCategoryTrigger, fbCategory, 2500);
-            if (isAborted()) return;
-          }
-          await new Promise(r => setTimeout(r, 200));
-          if (isAborted()) return;
-        }
-
-        // 5. Feedback Details -> Quality, Damaged, Taste, Foreign object, Expiry date preference, Size
-        if (fbDetails) {
-          console.log(`[Auto Fill] Setting Feedback Details to "${fbDetails}"...`);
-          const startWaitL2 = Date.now();
-          while (Date.now() - startWaitL2 < 2500) {
-            if (isAborted()) return;
-            const tr = getLiveFeedbackDetailsTrigger();
-            if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
-            await new Promise(r => setTimeout(r, 40));
-          }
-          if (isAborted()) return;
-          let detOk = await setDropdownValue(getLiveFeedbackDetailsTrigger, fbDetails, 3000);
-          if (isAborted()) return;
-          if (!detOk) {
-            await new Promise(r => setTimeout(r, 150));
-            if (isAborted()) return;
-            detOk = await setDropdownValue(getLiveFeedbackDetailsTrigger, fbDetails, 2500);
-            if (isAborted()) return;
-          }
-        }
-
-        if (isAborted()) return;
-        closeHangingDropdowns();
-        showToast(`✓ Auto Fill Complete: Feedback > ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''}`, 'info');
-        return;
+      const ok = await applyTreeToForm(treeType, category, detail, subDetail);
+      if (ok) {
+        showToast(`✓ Auto Fill Complete: ${category || treeType}${detail ? ' > ' + detail : ''}${subDetail ? ' > ' + subDetail : ''}`, 'info');
       }
-
-      const getL1 = () => getLiveLevel1Trigger(treeType);
-      const getL2 = () => getLiveLevel2Trigger(treeType);
-      const getL3 = () => getLiveLevel3Trigger(treeType);
-
-      // 1. Business Unit -> Check if Food Aggregation is set
-      const buTr = getLiveBusinessUnitTrigger();
-      if (buTr) {
-        const buSelected = buTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
-        const buText = ((buSelected ? buSelected.textContent : buTr.textContent) || '').trim().toLowerCase();
-        if (!buText.includes('food aggregation')) {
-          showToast('Setting Business unit: Food Aggregation...', 'info');
-          await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 4000);
-          if (isAborted()) return;
-          await new Promise(r => setTimeout(r, 200));
-          if (isAborted()) return;
-        }
-      }
-
-      // 2. Type -> Complaints, Feedback, or Internal Requests
-      if (treeType) {
-        const norm = (s) => (s || '').trim().toLowerCase()
-          .replace(/resturant/g, 'restaurant')
-          .replace(/requests/g, 'request')
-          .replace(/[^a-z0-9]/g, '');
-
-        const curTypeTr = getLiveTypeTrigger();
-        const curTypeSel = curTypeTr ? curTypeTr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
-        const curTypeText = norm(curTypeSel ? curTypeSel.textContent : curTypeTr?.textContent);
-        const targetTypeClean = norm(treeType);
-        const typeNeedsChange = !curTypeText || (curTypeText !== targetTypeClean && !curTypeText.includes(targetTypeClean) && !targetTypeClean.includes(curTypeText));
-
-        if (typeNeedsChange) {
-          console.log(`[Auto Fill] Setting Type to "${treeType}"...`);
-          await setDropdownValue(getLiveTypeTrigger, treeType, 4000);
-          if (isAborted()) return;
-          // Wait for Ember to re-render properties after Type change
-          await new Promise(r => setTimeout(r, 350));
-          if (isAborted()) return;
-          const startWaitAfterType = Date.now();
-          while (Date.now() - startWaitAfterType < 3000) {
-            if (isAborted()) return;
-            const l1Tr = getL1();
-            if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
-            await new Promise(r => setTimeout(r, 50));
-          }
-          if (isAborted()) return;
-        }
-      }
-
-      // 3. Category (Level 1) -> Set / change category
-      if (category) {
-        const curL1 = getL1();
-        const l1SelectedEl = curL1 ? curL1.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string') : null;
-        const normL1 = (s) => (s || '').trim().toLowerCase()
-          .replace(/resturant/g, 'restaurant')
-          .replace(/requests/g, 'request')
-          .replace(/[^a-z0-9]/g, '');
-        const curL1Text = normL1(l1SelectedEl ? l1SelectedEl.textContent : curL1?.textContent);
-        const targetL1Clean = normL1(category);
-        const l1NeedsChange = !curL1Text || (curL1Text !== targetL1Clean && !curL1Text.includes(targetL1Clean) && !targetL1Clean.includes(curL1Text));
-
-        if (l1NeedsChange) {
-          console.log(`[Auto Fill] Setting Level 1 to "${category}"...`);
-          await setDropdownValue(getL1, category, 4500);
-          if (isAborted()) return;
-          // Give Freshdesk time to process Category selection and dispatch dependent Level 2 options
-          await new Promise(r => setTimeout(r, 350));
-          if (isAborted()) return;
-        }
-
-        // Wait for Level 2 trigger to become ready and enabled
-        if (detail) {
-          const startWaitL2 = Date.now();
-          while (Date.now() - startWaitL2 < 3500) {
-            if (isAborted()) return;
-            const l2Tr = getL2();
-            if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
-              await new Promise(r => setTimeout(r, 120));
-              break;
-            }
-            await new Promise(r => setTimeout(r, 40));
-          }
-          if (isAborted()) return;
-        }
-      }
-
-      // 4. Details (Level 2) -> Set / change details
-      if (detail) {
-        console.log(`[Auto Fill] Setting Level 2 to "${detail}"...`);
-        let l2Ok = false;
-        for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
-          if (isAborted()) return;
-          if (attempt > 0) {
-            console.log(`[Auto Fill] Retrying Level 2 "${detail}" (attempt ${attempt + 1})...`);
-            await new Promise(r => setTimeout(r, 250));
-            if (isAborted()) return;
-          }
-          l2Ok = await setDropdownValue(getL2, detail, 4500);
-          if (isAborted()) return;
-        }
-
-        // Fallback: If still not selected, try direct Food Agg details triggers
-        if (!l2Ok) {
-          if (isAborted()) return;
-          console.log(`[Auto Fill] Level 2 not selected yet, trying fallback trigger...`);
-          await new Promise(r => setTimeout(r, 200));
-          if (isAborted()) return;
-          const fallbackL2 = () => findDropdownTrigger('Complaint Details Food Agg') ||
-                                   findDropdownTrigger('Complaint Details') ||
-                                   getL2();
-          l2Ok = await setDropdownValue(fallbackL2, detail, 3500);
-          if (isAborted()) return;
-        }
-
-        if (!l2Ok) {
-          console.log(`[Auto Fill] Could not select Level 2: "${detail}"`);
-          showToast(`⚠️ Could not auto-select "${detail}". Please check option.`, 'error');
-        }
-      }
-
-      // 5. Level 3 (Quality) -> if subDetail exists
-      if (subDetail) {
-        if (isAborted()) return;
-        console.log(`[Auto Fill] Setting Level 3 to "${subDetail}"...`);
-        let l3Ok = false;
-        for (let attempt = 0; attempt < 3 && !l3Ok; attempt++) {
-          if (isAborted()) return;
-          if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 150));
-            if (isAborted()) return;
-          }
-          l3Ok = await setDropdownValue(getL3, subDetail, 3500);
-          if (isAborted()) return;
-        }
-      }
-
-      if (isAborted()) return;
-      closeHangingDropdowns();
-      showToast(`✓ Auto Fill Complete: ${category || treeType}${detail ? ' > ' + detail : ''}${subDetail ? ' > ' + subDetail : ''}`, 'info');
     };
 
     const buildAutoFillSubmenu = (items, isRoot = false, path = [], depth = 0) => {
@@ -6294,40 +6262,59 @@ Have a good day.`
 
     // Custom Links Storage Helpers
     const getStoredCustomLinks = (callback) => {
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(['bf_custom_sheets_links'], (res) => {
-          if (!chrome.runtime.lastError && res && Array.isArray(res.bf_custom_sheets_links)) {
-            callback(res.bf_custom_sheets_links);
-            return;
-          }
-          try {
-            const val = JSON.parse(localStorage.getItem('bf_custom_sheets_links') || '[]');
-            callback(Array.isArray(val) ? val : []);
-          } catch (e) {
-            callback([]);
-          }
-        });
-      } else {
+      let handled = false;
+      const fallbackLocal = () => {
+        if (handled) return;
+        handled = true;
         try {
           const val = JSON.parse(localStorage.getItem('bf_custom_sheets_links') || '[]');
           callback(Array.isArray(val) ? val : []);
         } catch (e) {
           callback([]);
         }
-      }
+      };
+
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(['bf_custom_sheets_links'], (res) => {
+            if (handled) return;
+            let lastErr = null;
+            try {
+              lastErr = chrome.runtime ? chrome.runtime.lastError : null;
+            } catch (e) { }
+
+            if (!lastErr && res && Array.isArray(res.bf_custom_sheets_links)) {
+              handled = true;
+              callback(res.bf_custom_sheets_links);
+              return;
+            }
+            fallbackLocal();
+          });
+          return;
+        }
+      } catch (e) { }
+
+      fallbackLocal();
     };
 
     const saveStoredCustomLinks = (links, callback) => {
       try {
         localStorage.setItem('bf_custom_sheets_links', JSON.stringify(links));
       } catch (e) {}
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.set({ bf_custom_sheets_links: links }, () => {
-          if (callback) callback();
-        });
-      } else {
-        if (callback) callback();
-      }
+
+      try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set({ bf_custom_sheets_links: links }, () => {
+            try {
+              if (chrome.runtime && chrome.runtime.lastError) { /* ignore */ }
+            } catch (e) { }
+            if (callback) callback();
+          });
+          return;
+        }
+      } catch (e) {}
+
+      if (callback) callback();
     };
 
     let customLinksList = [];
@@ -7238,7 +7225,8 @@ Have a good day.`
     }
 
     const bfUid = usp.get('bf_uid');
-    const bfOrderNumber = usp.get('bf_order_number');
+    const rawOrderNumber = usp.get('bf_order_number');
+    const bfOrderNumber = (rawOrderNumber && isValidOrderNumber(rawOrderNumber)) ? normalizeOrderNumber(rawOrderNumber) : null;
     const bfDeliveryBy = usp.get('bf_delivery_by');
     const bfIsSenior = usp.get('bf_is_senior') === '1';
     const bfTreeChoice = usp.get('bf_tree_choice');
@@ -7328,7 +7316,7 @@ Have a good day.`
     }
 
     const assertOrderNumber = () => {
-      if (!bfOrderNumber) return true;
+      if (!bfOrderNumber || !isValidOrderNumber(bfOrderNumber)) return true;
       let targetOrderInput = null;
 
       const container = document.querySelector('[data-test-id*="cf_order_number"], [data-test-id*="cf_order_id"], [data-test-id*="order"]');
@@ -7379,7 +7367,7 @@ Have a good day.`
 
       if (targetOrderInput && !targetOrderInput.disabled) {
         // Only write if it's not already correct (allows the user to edit it if they want)
-        if (targetOrderInput.value && targetOrderInput.value.includes(bfOrderNumber)) return true;
+        if (targetOrderInput.value && targetOrderInput.value.trim() === bfOrderNumber) return true;
 
         const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
         if (nativeSetter) {
@@ -7407,7 +7395,7 @@ Have a good day.`
         return setTicketSubject(cat, det, subDet);
       }
 
-      if (!bfOrderNumber) return true;
+      if (!bfOrderNumber || !isValidOrderNumber(bfOrderNumber)) return true;
       const s = findSubjectInput();
       if (s && !s.disabled) {
         if (s.value && s.value.includes(bfOrderNumber)) return true;
@@ -7480,6 +7468,7 @@ Have a good day.`
           // Handle Tree Automation if params exist
           if (bfTreeChoice || bfDetail || bfCategory || bfSubDetail) {
             if (!treeAutomationDone) {
+              await new Promise(r => setTimeout(r, 200));
               const typeToApply = bfTreeType || 'Complaints';
               let catToApply = bfCategory || '';
               if (catToApply.includes('>')) {
@@ -7491,6 +7480,7 @@ Have a good day.`
               const ok = await applyTreeToForm(typeToApply, catToApply, detailToApply, subDetailToApply);
               if (ok) {
                 treeAutomationDone = true;
+                await new Promise(r => setTimeout(r, 300));
               } else {
                 treeOk = false;
               }
