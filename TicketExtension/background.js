@@ -131,7 +131,7 @@ function openOrderTabAndExtractPhone(orderUrl, sendResponse) {
     try {
       sendResponse(data);
     } catch (e) {
-      console.warn('[BF Extension] sendResponse failed:', e);
+      console.log('[BF Extension] sendResponse failed:', e);
     }
   };
 

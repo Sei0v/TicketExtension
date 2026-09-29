@@ -588,7 +588,7 @@
 
     if (isAborted()) return false;
     if (!trigger) {
-      console.warn(`[BF Extension] Trigger "${fieldName}" not available or disabled.`);
+      console.log(`[BF Extension] Trigger "${fieldName}" not available or disabled.`);
       return false;
     }
 
@@ -945,7 +945,7 @@
             showToast(`✓ [Complaints] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
             return true;
           } else {
-            console.warn('[BF Extension] Could not select Complaint Details:', detail);
+            console.log('[BF Extension] Could not select Complaint Details:', detail);
             return false;
           }
         }
@@ -2245,10 +2245,10 @@
       btnEl.textContent = 'Searching...';
       btnEl.style.pointerEvents = 'none';
 
-      // 4.2-second hard safety timeout: button will NEVER stay stuck!
+      // 6.5-second hard safety timeout: button will NEVER stay stuck!
       const safetyTimer = setTimeout(() => {
         if (!isFinished) {
-          console.warn('[BF Extension] Chat search safety timeout fired. Resetting button.');
+          console.log('[BF Extension] Chat search safety timeout fired. Resetting button.');
           finish();
           if (uid) {
             openKairos(uid, `ID ${uid}`);
@@ -2256,7 +2256,7 @@
             showToast('Search timed out. Please check order page or retry.', 'error');
           }
         }
-      }, 4200);
+      }, 6500);
 
       if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
         finish();
@@ -2343,7 +2343,7 @@
           finish();
 
           if (chrome.runtime.lastError) {
-            console.error('[BF Extension]', chrome.runtime.lastError);
+            console.log('[BF Extension]', chrome.runtime.lastError);
             showToast('Extension error: ' + chrome.runtime.lastError.message, 'error');
             return;
           }
@@ -5535,7 +5535,7 @@ Have a good day.`
 
       if (isAborted()) return false;
       if (!trigger || !document.body.contains(trigger)) {
-        console.warn(`[Auto Fill] Trigger for "${targetValue}" not found or remained disabled.`);
+        console.log(`[Auto Fill] Trigger for "${targetValue}" not found or remained disabled.`);
         return false;
       }
 
@@ -6012,7 +6012,7 @@ Have a good day.`
         // Fallback: If still not selected, try direct Food Agg details triggers
         if (!l2Ok) {
           if (isAborted()) return;
-          console.warn(`[Auto Fill] Level 2 not selected yet, trying fallback trigger...`);
+          console.log(`[Auto Fill] Level 2 not selected yet, trying fallback trigger...`);
           await new Promise(r => setTimeout(r, 200));
           if (isAborted()) return;
           const fallbackL2 = () => findDropdownTrigger('Complaint Details Food Agg') ||
@@ -6023,7 +6023,7 @@ Have a good day.`
         }
 
         if (!l2Ok) {
-          console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
+          console.log(`[Auto Fill] Could not select Level 2: "${detail}"`);
           showToast(`⚠️ Could not auto-select "${detail}". Please check option.`, 'error');
         }
       }
@@ -7501,7 +7501,7 @@ Have a good day.`
             allDone = true;
           }
         } catch (e) {
-          console.error('[BF Extension] Error in automation sync:', e);
+          console.log('[BF Extension] Error in automation sync:', e);
         } finally {
           isSyncing = false;
         }
