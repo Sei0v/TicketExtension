@@ -475,6 +475,8 @@
 
   const isDropdownSelected = (trigger, optionText) => {
     if (!trigger || !optionText) return false;
+    if (trigger.querySelector('.ember-power-select-placeholder')) return false;
+
     const norm = (s) => (s || '').trim().toLowerCase()
       .replace(/resturant/g, 'restaurant')
       .replace(/requests/g, 'request')
@@ -489,16 +491,16 @@
     if (selectedItem) {
       const cur = norm(selectedItem.textContent);
       const curClean = cur.replace(/[^a-z0-9]/g, '');
-      if (curClean && (cur === target || curClean === targetClean || (cur.length >= target.length && cur.includes(target)) || (cur.startsWith(target) || target.startsWith(cur)))) {
+      if (curClean && curClean !== 'any' && (cur === target || curClean === targetClean || (curClean.length >= 4 && targetClean.length >= 4 && (curClean.includes(targetClean) || targetClean.includes(curClean) || curClean.startsWith(targetClean) || targetClean.startsWith(curClean))))) {
         return true;
       }
     }
 
     // Check trigger text
     const fullText = norm(trigger.textContent);
-    if (fullText && fullText !== '--' && !fullText.startsWith('select') && !fullText.includes('choose')) {
+    if (fullText && fullText !== '--' && fullText !== 'any' && !fullText.startsWith('select') && !fullText.includes('choose')) {
       const fullClean = fullText.replace(/[^a-z0-9]/g, '');
-      if (fullClean && (fullText === target || fullClean === targetClean || (fullText.length >= target.length && fullText.includes(target)) || (fullText.startsWith(target) || target.startsWith(fullText)))) {
+      if (fullClean && fullClean !== 'any' && (fullText === target || fullClean === targetClean || (fullClean.length >= 4 && targetClean.length >= 4 && (fullClean.includes(targetClean) || targetClean.includes(fullClean) || fullClean.startsWith(targetClean) || targetClean.startsWith(fullClean))))) {
         return true;
       }
     }
@@ -506,8 +508,63 @@
     return false;
   };
 
+  let currentAutomationToken = 0;
+
+  const closeHangingDropdowns = () => {
+    try {
+      if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
+    } catch (e) { }
+
+    try {
+      ['keydown', 'keyup'].forEach(type => {
+        document.dispatchEvent(new KeyboardEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          key: 'Escape',
+          code: 'Escape',
+          keyCode: 27,
+          which: 27,
+          view: window
+        }));
+      });
+    } catch (e) { }
+
+    try {
+      const outside = document.querySelector('.main-header, #app-header, body') || document.body;
+      ['mousedown', 'mouseup', 'click'].forEach(type => {
+        outside.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: 10,
+          clientY: 10,
+          button: 0,
+          buttons: 0
+        }));
+      });
+    } catch (e) { }
+
+    try {
+      document.querySelectorAll('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed)').forEach(c => {
+        c.classList.add('ember-basic-dropdown-content--closed');
+      });
+      document.querySelectorAll('.ember-power-select-trigger[aria-expanded="true"]').forEach(tr => {
+        tr.setAttribute('aria-expanded', 'false');
+        tr.classList.remove('ember-basic-dropdown-trigger--expanded', 'ember-power-select-trigger--active');
+      });
+      document.querySelectorAll('.ember-basic-dropdown-overlay').forEach(ov => {
+        try { ov.remove(); } catch (e) { }
+      });
+    } catch (e) { }
+  };
+
   const assertDropdown = async (fieldName, optionText, maxWaitMs = 6000) => {
     if (!fieldName || !optionText) return false;
+
+    const myToken = currentAutomationToken;
+    const isAborted = () => myToken !== currentAutomationToken;
 
     const startTime = Date.now();
 
@@ -523,11 +580,13 @@
     // 1. Wait for trigger to exist and be enabled
     let trigger = null;
     while (Date.now() - startTime < maxWaitMs) {
+      if (isAborted()) return false;
       trigger = getLiveTrigger();
       if (trigger) break;
       await new Promise(r => setTimeout(r, 30));
     }
 
+    if (isAborted()) return false;
     if (!trigger) {
       console.warn(`[BF Extension] Trigger "${fieldName}" not available or disabled.`);
       return false;
@@ -576,6 +635,12 @@
       let searched = false;
 
       const checkIv = setInterval(() => {
+        if (isAborted()) {
+          clearInterval(checkIv);
+          resolve(false);
+          return;
+        }
+
         // Keep trigger reference alive if Ember re-rendered the component
         if (!document.body.contains(trigger)) {
           const freshTr = getLiveTrigger();
@@ -591,8 +656,30 @@
 
         const currentlyOpen = isDropdownOpen(trigger);
 
-        // Query options directly in document!
-        const allOptions = Array.from(document.querySelectorAll('.ember-power-select-option, [role="option"]'));
+        const getContent = () => {
+          if (trigger) {
+            const owns = trigger.getAttribute('aria-owns') || trigger.getAttribute('aria-controls');
+            if (owns) {
+              const el = document.getElementById(owns);
+              if (el && !el.classList.contains('ember-basic-dropdown-content--closed')) return el;
+            }
+          }
+          const openContents = Array.from(document.querySelectorAll('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed)'));
+          const visible = openContents.find(el => el.offsetParent !== null && el.getBoundingClientRect().height > 0);
+          return visible || (openContents.length > 0 ? openContents[openContents.length - 1] : null);
+        };
+
+        const activeContent = getContent();
+        let allOptions = [];
+        if (activeContent) {
+          allOptions = Array.from(activeContent.querySelectorAll('.ember-power-select-option, [role="option"]'));
+        }
+        if (!allOptions || allOptions.length === 0) {
+          allOptions = Array.from(document.querySelectorAll(
+            '.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed) .ember-power-select-option, ' +
+            '.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed) [role="option"]'
+          ));
+        }
 
         // Filter out loading messages so we don't prematurely abort while Freshdesk is fetching
         const options = allOptions.filter(o => {
@@ -604,16 +691,37 @@
         // Priority 1: Exact text match or clean alphanumeric match
         let matched = options.find(o => {
           const txt = norm(o.textContent);
-          if (!txt || txt === '--' || txt.startsWith('select')) return false;
+          if (!txt || txt === '--' || txt === 'any' || txt.startsWith('select')) return false;
           if (txt === target) return true;
           return txt.replace(/[^a-z0-9]/g, '') === targetClean;
         });
 
-        // Priority 2: Starts with or includes
+        // Priority 2: Segmented parts (e.g. "Over cooked / burnt" vs "Over cooked")
         if (!matched) {
           matched = options.find(o => {
             const txt = norm(o.textContent);
-            if (!txt || txt === '--' || txt.startsWith('select')) return false;
+            if (!txt || txt === '--' || txt === 'any' || txt.startsWith('select')) return false;
+            const segments = txt.split(/[/\\&>-]/).map(p => p.trim().replace(/[^a-z0-9]/g, ''));
+            return segments.some(p => p === targetClean || (p.length >= 3 && targetClean.length >= 3 && (p.includes(targetClean) || targetClean.includes(p))));
+          });
+        }
+
+        // Priority 3: Clean string includes or startsWith
+        if (!matched) {
+          matched = options.find(o => {
+            const txt = norm(o.textContent);
+            if (!txt || txt === '--' || txt === 'any' || txt.startsWith('select')) return false;
+            const tc = txt.replace(/[^a-z0-9]/g, '');
+            return (tc.length >= 3 && targetClean.length >= 3) &&
+                   (tc.includes(targetClean) || targetClean.includes(tc) || tc.startsWith(targetClean) || targetClean.startsWith(tc));
+          });
+        }
+
+        // Priority 4: Starts with or includes
+        if (!matched) {
+          matched = options.find(o => {
+            const txt = norm(o.textContent);
+            if (!txt || txt === '--' || txt === 'any' || txt.startsWith('select')) return false;
             return txt.startsWith(target) || target.startsWith(txt) || txt.includes(target) || target.includes(txt);
           });
         }
@@ -627,6 +735,7 @@
               list.scrollTop = matched.offsetTop - list.offsetTop;
             } catch (e) { }
           }
+          try { matched.scrollIntoView({ block: 'nearest' }); } catch (e) { }
           mouseClick(matched);
           setTimeout(() => {
             resolve(isDropdownSelected(trigger, optionText) || true);
@@ -634,13 +743,14 @@
           return;
         }
 
-        // If not found after ~280ms, try typing in search input IF inside an active dropdown
-        if (attempts > 8 && !searched && currentlyOpen) {
+        // If not found after ~210ms, try typing in search input (in trigger or dropdown content)
+        if (attempts > 6 && !searched && currentlyOpen) {
           searched = true;
-          const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
-          const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
+          const searchInput = trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') ||
+                              (activeContent ? activeContent.querySelector('input.ember-power-select-search-input, input') : null);
           if (searchInput) {
-            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            try { searchInput.focus(); } catch (e) { }
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
             if (nativeSetter) nativeSetter.call(searchInput, optionText);
             else searchInput.value = optionText;
             searchInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -781,6 +891,8 @@
 
     const run = async () => {
       const isNewTicketPage = window.location.pathname.startsWith('/a/tickets/new');
+      const myToken = currentAutomationToken;
+      const isAborted = () => myToken !== currentAutomationToken;
 
       // 0. Set Subject immediately if on new ticket creation page
       if (isNewTicketPage) {
@@ -793,11 +905,13 @@
         if (!isDropdownSelected(buTr, 'Food Aggregation')) {
           showToast('Setting Business unit: Food Aggregation...', 'info');
           const buOk = await assertDropdown('Business unit', 'Food Aggregation', 6000);
+          if (isAborted()) return false;
           if (buOk) {
             await new Promise(r => setTimeout(r, 400));
           }
         }
       }
+      if (isAborted()) return false;
 
       // 2. Set Type (Complaints or Feedback)
       if (treeType) {
@@ -931,11 +1045,71 @@
 
     activeTreePromise = run();
     try {
-      return await activeTreePromise;
+      const res = await activeTreePromise;
+      closeHangingDropdowns();
+      return res;
     } finally {
+      closeHangingDropdowns();
       activeTreePromise = null;
     }
   };
+
+  function resetExtensionTool() {
+    currentAutomationToken++;
+    activeTreePromise = null;
+
+    // 1. Remove all modals & backdrops
+    const modalSelectors = [
+      '#bf-custom-link-backdrop',
+      '#bf-custom-link-modal',
+      '#bf-email-modal',
+      '#bf-percentage-calc-modal',
+      '#bf-delay-modal'
+    ];
+    modalSelectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        try { el.remove(); } catch (e) { }
+      });
+    });
+
+    // 2. Remove any detached or floating menus
+    document.querySelectorAll('.bf-tree-menu, .bf-sheets-menu, .bf-system-menu').forEach(el => {
+      try { el.remove(); } catch (e) { }
+    });
+
+    // 3. Close open Ember dropdowns if any
+    try {
+      const openTr = document.querySelector('.ember-basic-dropdown-trigger--expanded, .ember-power-select-trigger--active');
+      if (openTr) {
+        ['mousedown', 'mouseup', 'click'].forEach(type => {
+          try {
+            openTr.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+          } catch (err) { }
+        });
+        try { openTr.click(); } catch (err) { }
+      }
+      const overlay = document.querySelector('.ember-basic-dropdown-overlay');
+      if (overlay) {
+        try { overlay.click(); } catch (err) { }
+      }
+    } catch (e) { }
+
+    // 4. Remove current toolbar container
+    const oldContainer = document.getElementById('bf-custom-ticket-buttons');
+    if (oldContainer) {
+      try { oldContainer.remove(); } catch (e) { }
+    }
+
+    // 5. Rebuild toolbar cleanly
+    ensureButtons();
+
+    // 6. Notify user
+    showToast('✓ Extension reset successfully!', 'info');
+  }
+
+  try {
+    window.bfResetExtension = resetExtensionTool;
+  } catch (e) { }
 
   function ensureButtons() {
     if (!document.body) return;
@@ -953,16 +1127,57 @@
     container.style.zIndex = '999999';
     container.style.transition = 'left 0.25s ease, right 0.25s ease';
 
-    // Header row with side toggle button (Left/Right)
+    // Header row with Reset button and side toggle button (Left/Right)
     const headerRow = document.createElement('div');
     headerRow.style.display = 'flex';
     headerRow.style.width = '100%';
     headerRow.style.marginBottom = '2px';
+    headerRow.style.gap = '4px';
+    headerRow.style.alignItems = 'center';
+    headerRow.style.justifyContent = 'space-between';
+
+    // Reset button (unstick tool, menus, automations)
+    const resetBtn = document.createElement('button');
+    resetBtn.id = 'bf-reset-tool-btn';
+    resetBtn.setAttribute('type', 'button');
+    resetBtn.innerHTML = '&#8635; Reset'; // ↻ Reset
+    resetBtn.title = 'Reset tool & clear active automations';
+    resetBtn.style.padding = '3px 7px';
+    resetBtn.style.border = 'none';
+    resetBtn.style.borderRadius = '4px';
+    resetBtn.style.backgroundColor = '#4b5563';
+    resetBtn.style.color = '#ffffff';
+    resetBtn.style.fontSize = '11px';
+    resetBtn.style.fontWeight = 'bold';
+    resetBtn.style.cursor = 'pointer';
+    resetBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+    resetBtn.style.transition = 'background-color 0.2s, transform 0.1s';
+    resetBtn.style.lineHeight = '1.2';
+    resetBtn.style.whiteSpace = 'nowrap';
+    resetBtn.style.flexShrink = '0';
+
+    resetBtn.addEventListener('mouseenter', () => {
+      resetBtn.style.backgroundColor = '#dc2626';
+    });
+    resetBtn.addEventListener('mouseleave', () => {
+      resetBtn.style.backgroundColor = '#4b5563';
+    });
+    resetBtn.addEventListener('mousedown', () => {
+      resetBtn.style.transform = 'scale(0.93)';
+    });
+    resetBtn.addEventListener('mouseup', () => {
+      resetBtn.style.transform = 'scale(1)';
+    });
+    resetBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      resetExtensionTool();
+    });
 
     const toggleBtn = document.createElement('button');
     toggleBtn.id = 'bf-toggle-pos-btn';
     toggleBtn.setAttribute('type', 'button');
-    toggleBtn.style.padding = '3px 8px';
+    toggleBtn.style.padding = '3px 7px';
     toggleBtn.style.border = 'none';
     toggleBtn.style.borderRadius = '4px';
     toggleBtn.style.backgroundColor = '#4b5563';
@@ -974,6 +1189,7 @@
     toggleBtn.style.transition = 'background-color 0.2s, transform 0.1s';
     toggleBtn.style.lineHeight = '1.2';
     toggleBtn.style.whiteSpace = 'nowrap';
+    toggleBtn.style.flexShrink = '0';
 
     toggleBtn.addEventListener('mouseenter', () => {
       toggleBtn.style.backgroundColor = '#374151';
@@ -1020,14 +1236,13 @@
         container.style.right = 'auto';
         toggleBtn.innerHTML = '⇄ &#9654;'; // ⇄ ▶
         toggleBtn.title = 'Move to right';
-        headerRow.style.justifyContent = 'flex-start';
       } else {
         container.style.right = '20px';
         container.style.left = 'auto';
         toggleBtn.innerHTML = '&#9664; ⇄'; // ◀ ⇄
         toggleBtn.title = 'Move to left';
-        headerRow.style.justifyContent = 'flex-end';
       }
+      headerRow.style.justifyContent = 'space-between';
 
       if (typeof updateTreeMenuPosition === 'function') {
         updateTreeMenuPosition(side);
@@ -1051,6 +1266,7 @@
     });
 
     applyPosition(currentSide);
+    headerRow.appendChild(resetBtn);
     headerRow.appendChild(toggleBtn);
 
     const createBtn = (id, text, color) => {
@@ -5258,6 +5474,9 @@ Have a good day.`
 
     const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 5000) => {
       if (!getTriggerFn || !targetValue) return false;
+      const myToken = currentAutomationToken;
+      const isAborted = () => myToken !== currentAutomationToken;
+
       const norm = (s) => (s || '').trim().toLowerCase()
         .replace(/resturant/g, 'restaurant')
         .replace(/requests/g, 'request')
@@ -5268,14 +5487,21 @@ Have a good day.`
 
       const isAlreadySelected = (tr) => {
         if (!tr) return false;
-        const selectedEl = tr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string');
+        if (tr.querySelector('.ember-power-select-placeholder')) return false;
+
+        const selectedEl = tr.querySelector('.ember-power-select-selected-item, .trigger-power-select, .ember-power-select-trigger-string, [data-test-id*="selected-item"]');
         const curText = norm((selectedEl ? selectedEl.textContent : tr.textContent) || '');
-        if (!curText || curText === '--' || curText.startsWith('select') || curText.includes('choose')) {
+        if (!curText || curText === '--' || curText === 'any' || curText.startsWith('select') || curText.includes('choose') || curText.startsWith('any')) {
           return false;
         }
         const curClean = curText.replace(/[^a-z0-9]/g, '');
-        if (!curClean) return false;
-        return curClean === targetClean || curText === target || curClean.startsWith(targetClean) || targetClean.startsWith(curClean);
+        if (!curClean || curClean === 'any') return false;
+
+        if (curClean === targetClean || curText === target) return true;
+        if (curClean.length >= 4 && targetClean.length >= 4 && (curClean.startsWith(targetClean) || targetClean.startsWith(curClean) || curClean.includes(targetClean))) {
+          return true;
+        }
+        return false;
       };
 
       // Fast-path: Check immediately if trigger exists and already selected
@@ -5288,7 +5514,7 @@ Have a good day.`
         if (!el) return;
         ['mousedown', 'mouseup', 'click'].forEach(type => {
           try {
-            el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+            el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window, button: 0 }));
           } catch (e) { }
         });
         try {
@@ -5299,6 +5525,7 @@ Have a good day.`
       const startWait = Date.now();
       // 1. Wait for trigger to be rendered, attached to DOM, and NOT disabled
       while (Date.now() - startWait < maxWaitMs) {
+        if (isAborted()) return false;
         trigger = getTriggerFn();
         if (trigger && document.body.contains(trigger) && !isTriggerDisabled(trigger)) {
           break;
@@ -5306,6 +5533,7 @@ Have a good day.`
         await new Promise(r => setTimeout(r, 25));
       }
 
+      if (isAborted()) return false;
       if (!trigger || !document.body.contains(trigger)) {
         console.warn(`[Auto Fill] Trigger for "${targetValue}" not found or remained disabled.`);
         return false;
@@ -5315,13 +5543,67 @@ Have a good day.`
         return true;
       }
 
+      const getActiveDropdownContent = () => {
+        const liveTr = getTriggerFn() || trigger;
+        if (liveTr) {
+          const owns = liveTr.getAttribute('aria-owns') || liveTr.getAttribute('aria-controls');
+          if (owns) {
+            const el = document.getElementById(owns);
+            if (el && !el.classList.contains('ember-basic-dropdown-content--closed')) return el;
+          }
+          const trId = liveTr.id;
+          if (trId) {
+            const el = document.getElementById(`ember-basic-dropdown-content-${trId}`) ||
+                       document.getElementById(trId.replace('trigger', 'content')) ||
+                       document.querySelector(`[data-ebd-id="${trId}"]`);
+            if (el && !el.classList.contains('ember-basic-dropdown-content--closed')) return el;
+          }
+        }
+        const openContents = Array.from(document.querySelectorAll(
+          '.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed)'
+        ));
+        const visible = openContents.find(el => el.offsetParent !== null && el.getBoundingClientRect().height > 0);
+        return visible || (openContents.length > 0 ? openContents[openContents.length - 1] : null);
+      };
+
+      const getSearchInput = () => {
+        const liveTr = getTriggerFn() || trigger;
+        if (liveTr) {
+          const inp = liveTr.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input');
+          if (inp && !inp.disabled) return inp;
+        }
+        const content = getActiveDropdownContent();
+        if (content) {
+          const inp = content.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input');
+          if (inp && !inp.disabled) return inp;
+        }
+        return document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed) input, .ember-power-select-trigger--active input');
+      };
+
+      const fillSearch = (inp, text) => {
+        if (!inp) return;
+        try { inp.focus(); } catch (e) { }
+        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+        if (nativeSetter) nativeSetter.call(inp, text);
+        else inp.value = text;
+        inp.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          inp.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: ch }));
+          inp.dispatchEvent(new KeyboardEvent('keypress', { bubbles: true, key: ch }));
+          inp.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: ch }));
+        }
+      };
+
       // 2. Open dropdown and find matching option
       const startFind = Date.now();
       let lastClickTime = 0;
-      let searched = false;
+      let searched = 0;
       let openCycles = 0;
 
       while (Date.now() - startFind < maxWaitMs) {
+        if (isAborted()) return false;
         const liveTr = getTriggerFn();
         if (liveTr && document.body.contains(liveTr)) {
           trigger = liveTr;
@@ -5347,9 +5629,17 @@ Have a good day.`
         }
 
         // Active dropdown content
-        const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
-        const container = openDropdown || document;
-        const allOptions = Array.from(container.querySelectorAll('.ember-power-select-option, [role="option"]'));
+        const activeContent = getActiveDropdownContent();
+        let allOptions = [];
+        if (activeContent) {
+          allOptions = Array.from(activeContent.querySelectorAll('.ember-power-select-option, [role="option"]'));
+        }
+        if (!allOptions || allOptions.length === 0) {
+          allOptions = Array.from(document.querySelectorAll(
+            '.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed) .ember-power-select-option, ' +
+            '.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed) [role="option"]'
+          ));
+        }
 
         const hasLoadingMsg = allOptions.some(o => o.classList.contains('ember-power-select-option--loading-message'));
         if (hasLoadingMsg) {
@@ -5365,20 +5655,38 @@ Have a good day.`
         // 1. Exact or clean match
         let match = validOptions.find(o => {
           const t = norm(o.textContent);
-          if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
+          if (!t || t === '--' || t === 'any' || t.startsWith('select') || t.includes('choose')) return false;
           const tClean = t.replace(/[^a-z0-9]/g, '');
           return t === target || tClean === targetClean;
         });
 
-        // 2. Starts with / includes match
+        // 2. Segmented / parts match (e.g. "Over cooked / burnt" vs "Over cooked")
         if (!match) {
           match = validOptions.find(o => {
             const t = norm(o.textContent);
-            if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
+            if (!t || t === '--' || t === 'any' || t.startsWith('select') || t.includes('choose')) return false;
+            const segments = t.split(/[/\\&>-]/).map(p => p.trim().replace(/[^a-z0-9]/g, ''));
+            return segments.some(p => p === targetClean || (p.length >= 3 && targetClean.length >= 3 && (p.includes(targetClean) || targetClean.includes(p))));
+          });
+        }
+
+        // 3. Clean string includes or startsWith
+        if (!match) {
+          match = validOptions.find(o => {
+            const t = norm(o.textContent);
+            if (!t || t === '--' || t === 'any' || t.startsWith('select') || t.includes('choose')) return false;
             const tClean = t.replace(/[^a-z0-9]/g, '');
-            return tClean.startsWith(targetClean) || targetClean.startsWith(tClean) ||
-                   t.includes(target) || target.includes(t) ||
-                   tClean.includes(targetClean) || targetClean.includes(tClean);
+            return (tClean.length >= 3 && targetClean.length >= 3) &&
+                   (tClean.includes(targetClean) || targetClean.includes(tClean) || tClean.startsWith(targetClean) || targetClean.startsWith(tClean));
+          });
+        }
+
+        // 4. Substring match
+        if (!match) {
+          match = validOptions.find(o => {
+            const t = norm(o.textContent);
+            if (!t || t === '--' || t === 'any' || t.startsWith('select') || t.includes('choose')) return false;
+            return t.includes(target) || target.includes(t);
           });
         }
 
@@ -5387,40 +5695,89 @@ Have a good day.`
           if (list) {
             try { list.scrollTop = match.offsetTop - list.offsetTop; } catch (e) { }
           }
-          dispatchClick(match);
+          try { match.scrollIntoView({ block: 'nearest' }); } catch (e) { }
 
-          // Poll for Ember to reflect selection
-          const confirmStart = Date.now();
-          while (Date.now() - confirmStart < 700) {
-            await new Promise(r => setTimeout(r, 40));
+          const sInp = getSearchInput();
+
+          try {
+            match.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+            match.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 1 }));
+            match.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 0 }));
+            match.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 0 }));
+            match.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window, button: 0, buttons: 0 }));
+            if (typeof match.click === 'function') match.click();
+          } catch (e) { }
+
+          if (sInp) {
+            try {
+              sInp.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+              sInp.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13 }));
+            } catch (e) { }
+          }
+
+          // Check if selection registered on option or trigger
+          await new Promise(r => setTimeout(r, 60));
+
+          const isSelectedNow = () => {
             const postTr = getTriggerFn() || trigger;
-            if (isAlreadySelected(postTr)) {
+            if (isAlreadySelected(postTr)) return true;
+            if (match) {
+              if (match.getAttribute('aria-selected') === 'true') return true;
+              if (match.classList.contains('ember-power-select-option--selected')) return true;
+              if (match.querySelector('.checked, svg, [data-icon*="check"]')) return true;
+            }
+            return false;
+          };
+
+          if (isSelectedNow()) {
+            closeHangingDropdowns();
+            await new Promise(r => setTimeout(r, 40));
+            return true;
+          }
+
+          const confirmStart = Date.now();
+          while (Date.now() - confirmStart < 400) {
+            if (isAborted()) return false;
+            await new Promise(r => setTimeout(r, 35));
+            if (isSelectedNow()) {
+              closeHangingDropdowns();
+              await new Promise(r => setTimeout(r, 40));
               return true;
             }
           }
-          const postTr = getTriggerFn() || trigger;
-          if (isAlreadySelected(postTr)) {
-            return true;
-          }
+
+          closeHangingDropdowns();
+          await new Promise(r => setTimeout(r, 40));
+          return true;
         }
 
-        // If open and match not found after 400ms, try typing in search input
-        if (Date.now() - startFind > 400 && !searched && open) {
-          searched = true;
-          const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
+        // If open and match not found after 150ms, try typing in search input (in trigger or content)
+        if (Date.now() - startFind > 150 && searched === 0 && open) {
+          searched = 1;
+          const searchInput = getSearchInput();
           if (searchInput) {
-            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            if (nativeSetter) nativeSetter.call(searchInput, targetValue);
-            else searchInput.value = targetValue;
-            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
-            await new Promise(r => setTimeout(r, 60));
+            fillSearch(searchInput, targetValue);
+            await new Promise(r => setTimeout(r, 80));
             continue;
           }
         }
 
-        // If dropdown is open for over 650ms without match, toggle close and reopen to refresh options from Ember store
-        if (open && !match && Date.now() - lastClickTime > 650 && openCycles < 2) {
+        // If still not matched after 650ms, try searching with first word
+        if (Date.now() - startFind > 650 && searched === 1 && open) {
+          searched = 2;
+          const firstWord = targetValue.split(/\s+/)[0];
+          if (firstWord && firstWord !== targetValue) {
+            const searchInput = getSearchInput();
+            if (searchInput) {
+              fillSearch(searchInput, firstWord);
+              await new Promise(r => setTimeout(r, 80));
+              continue;
+            }
+          }
+        }
+
+        // If dropdown is open for over 900ms without match, toggle close and reopen to refresh options from Ember store
+        if (open && !match && Date.now() - lastClickTime > 900 && openCycles < 2) {
           openCycles++;
           lastClickTime = Date.now();
           dispatchClick(trigger);
@@ -5434,11 +5791,16 @@ Have a good day.`
       }
 
       await new Promise(r => setTimeout(r, 50));
+      closeHangingDropdowns();
       const finalTr = getTriggerFn() || trigger;
       return isAlreadySelected(finalTr);
     };
 
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
+      const myToken = currentAutomationToken;
+      const isAborted = () => myToken !== currentAutomationToken;
+      if (isAborted()) return;
+
       console.log(`[Auto Fill] Start: type="${treeType}", category="${category}", detail="${detail}", subDetail="${subDetail}"`);
 
       // Dedicated Feedback Auto Fill flow (Type -> Feedback Type -> Feedback -> Feedback Details)
@@ -5469,7 +5831,9 @@ Have a good day.`
           if (!buText.includes('food aggregation')) {
             showToast('Setting Business unit: Food Aggregation...', 'info');
             await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 3000);
+            if (isAborted()) return;
             await new Promise(r => setTimeout(r, 150));
+            if (isAborted()) return;
           }
         }
 
@@ -5480,14 +5844,18 @@ Have a good day.`
         if (!curTypeText.includes('feedback')) {
           console.log('[Auto Fill] Setting Type to "Feedback"...');
           await setDropdownValue(getLiveTypeTrigger, 'Feedback', 3000);
+          if (isAborted()) return;
           await new Promise(r => setTimeout(r, 250));
+          if (isAborted()) return;
         }
 
         // 3. Feedback Type -> Negative / Positive / Neutral
         if (fbType) {
           console.log(`[Auto Fill] Setting Feedback Type to "${fbType}"...`);
           await setDropdownValue(getLiveFeedbackTypeTrigger, fbType, 3000);
+          if (isAborted()) return;
           await new Promise(r => setTimeout(r, 200));
+          if (isAborted()) return;
         }
 
         // 4. Feedback -> Products Quality, CX agent, etc.
@@ -5495,16 +5863,22 @@ Have a good day.`
           console.log(`[Auto Fill] Setting Feedback to "${fbCategory}"...`);
           const startWaitL1 = Date.now();
           while (Date.now() - startWaitL1 < 2500) {
+            if (isAborted()) return;
             const tr = getLiveFeedbackCategoryTrigger();
             if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
             await new Promise(r => setTimeout(r, 40));
           }
+          if (isAborted()) return;
           let catOk = await setDropdownValue(getLiveFeedbackCategoryTrigger, fbCategory, 3000);
+          if (isAborted()) return;
           if (!catOk) {
             await new Promise(r => setTimeout(r, 150));
+            if (isAborted()) return;
             catOk = await setDropdownValue(getLiveFeedbackCategoryTrigger, fbCategory, 2500);
+            if (isAborted()) return;
           }
           await new Promise(r => setTimeout(r, 200));
+          if (isAborted()) return;
         }
 
         // 5. Feedback Details -> Quality, Damaged, Taste, Foreign object, Expiry date preference, Size
@@ -5512,17 +5886,24 @@ Have a good day.`
           console.log(`[Auto Fill] Setting Feedback Details to "${fbDetails}"...`);
           const startWaitL2 = Date.now();
           while (Date.now() - startWaitL2 < 2500) {
+            if (isAborted()) return;
             const tr = getLiveFeedbackDetailsTrigger();
             if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
             await new Promise(r => setTimeout(r, 40));
           }
+          if (isAborted()) return;
           let detOk = await setDropdownValue(getLiveFeedbackDetailsTrigger, fbDetails, 3000);
+          if (isAborted()) return;
           if (!detOk) {
             await new Promise(r => setTimeout(r, 150));
+            if (isAborted()) return;
             detOk = await setDropdownValue(getLiveFeedbackDetailsTrigger, fbDetails, 2500);
+            if (isAborted()) return;
           }
         }
 
+        if (isAborted()) return;
+        closeHangingDropdowns();
         showToast(`✓ Auto Fill Complete: Feedback > ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''}`, 'info');
         return;
       }
@@ -5539,7 +5920,9 @@ Have a good day.`
         if (!buText.includes('food aggregation')) {
           showToast('Setting Business unit: Food Aggregation...', 'info');
           await setDropdownValue(getLiveBusinessUnitTrigger, 'Food Aggregation', 4000);
+          if (isAborted()) return;
           await new Promise(r => setTimeout(r, 200));
+          if (isAborted()) return;
         }
       }
 
@@ -5559,14 +5942,18 @@ Have a good day.`
         if (typeNeedsChange) {
           console.log(`[Auto Fill] Setting Type to "${treeType}"...`);
           await setDropdownValue(getLiveTypeTrigger, treeType, 4000);
+          if (isAborted()) return;
           // Wait for Ember to re-render properties after Type change
           await new Promise(r => setTimeout(r, 350));
+          if (isAborted()) return;
           const startWaitAfterType = Date.now();
           while (Date.now() - startWaitAfterType < 3000) {
+            if (isAborted()) return;
             const l1Tr = getL1();
             if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
             await new Promise(r => setTimeout(r, 50));
           }
+          if (isAborted()) return;
         }
       }
 
@@ -5585,14 +5972,17 @@ Have a good day.`
         if (l1NeedsChange) {
           console.log(`[Auto Fill] Setting Level 1 to "${category}"...`);
           await setDropdownValue(getL1, category, 4500);
+          if (isAborted()) return;
           // Give Freshdesk time to process Category selection and dispatch dependent Level 2 options
           await new Promise(r => setTimeout(r, 350));
+          if (isAborted()) return;
         }
 
         // Wait for Level 2 trigger to become ready and enabled
         if (detail) {
           const startWaitL2 = Date.now();
           while (Date.now() - startWaitL2 < 3500) {
+            if (isAborted()) return;
             const l2Tr = getL2();
             if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
               await new Promise(r => setTimeout(r, 120));
@@ -5600,6 +5990,7 @@ Have a good day.`
             }
             await new Promise(r => setTimeout(r, 40));
           }
+          if (isAborted()) return;
         }
       }
 
@@ -5608,36 +5999,53 @@ Have a good day.`
         console.log(`[Auto Fill] Setting Level 2 to "${detail}"...`);
         let l2Ok = false;
         for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
+          if (isAborted()) return;
           if (attempt > 0) {
             console.log(`[Auto Fill] Retrying Level 2 "${detail}" (attempt ${attempt + 1})...`);
             await new Promise(r => setTimeout(r, 250));
+            if (isAborted()) return;
           }
           l2Ok = await setDropdownValue(getL2, detail, 4500);
+          if (isAborted()) return;
         }
 
-        // Fallback: If still not selected, try findDropdownTrigger('Complaint Details') directly
+        // Fallback: If still not selected, try direct Food Agg details triggers
         if (!l2Ok) {
+          if (isAborted()) return;
           console.warn(`[Auto Fill] Level 2 not selected yet, trying fallback trigger...`);
           await new Promise(r => setTimeout(r, 200));
-          const fallbackL2 = () => findDropdownTrigger('Complaint Details') || getL2();
+          if (isAborted()) return;
+          const fallbackL2 = () => findDropdownTrigger('Complaint Details Food Agg') ||
+                                   findDropdownTrigger('Complaint Details') ||
+                                   getL2();
           l2Ok = await setDropdownValue(fallbackL2, detail, 3500);
+          if (isAborted()) return;
         }
 
         if (!l2Ok) {
           console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
+          showToast(`⚠️ Could not auto-select "${detail}". Please check option.`, 'error');
         }
       }
 
       // 5. Level 3 (Quality) -> if subDetail exists
       if (subDetail) {
+        if (isAborted()) return;
         console.log(`[Auto Fill] Setting Level 3 to "${subDetail}"...`);
         let l3Ok = false;
         for (let attempt = 0; attempt < 3 && !l3Ok; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 150));
+          if (isAborted()) return;
+          if (attempt > 0) {
+            await new Promise(r => setTimeout(r, 150));
+            if (isAborted()) return;
+          }
           l3Ok = await setDropdownValue(getL3, subDetail, 3500);
+          if (isAborted()) return;
         }
       }
 
+      if (isAborted()) return;
+      closeHangingDropdowns();
       showToast(`✓ Auto Fill Complete: ${category || treeType}${detail ? ' > ' + detail : ''}${subDetail ? ' > ' + subDetail : ''}`, 'info');
     };
 
