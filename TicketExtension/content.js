@@ -363,30 +363,36 @@
       if (labelTr && document.body.contains(labelTr)) return labelTr;
     }
 
-    // 4. Complaint Category (Level 1)
+    // 4. Complaint Category Food Agg (Level 1) — ONLY target Food Agg, SKIP Supermarket
     if (norm === 'complaint category' || (norm.includes('complaint') && (norm.includes('category') || norm.includes('cat'))) || norm === 'category') {
       const selectors = [
         '[data-test-id*="cf_complaint_category_food_agg" i]',
         '[data-test-id*="complaint_category_food_agg" i]',
         '[title*="Complaint Category Food Agg" i]',
-        '[data-test-id*="cf_complaint_category" i]:not([data-test-id*="buddy" i])',
-        '[data-test-id*="complaint_category" i]:not([data-test-id*="buddy" i])',
-        '[data-test-id*="complaint category" i]:not([data-test-id*="buddy" i])',
-        '[data-test-id*="tkt-properties-cf_complaint_category" i]:not([data-test-id*="buddy" i])',
-        '[title*="Complaint Category" i]:not([title*="Buddy" i])',
-        '[data-test-id="level-1" i]',
-        '[data-test-id*="level-1" i]',
-        '[data-test-id*="level_1" i]'
+        '[title="Complaint Category Food Agg" i]'
       ];
-      const tr = pickBestTrigger(selectors);
+      let tr = pickBestTrigger(selectors);
       if (tr) return tr;
 
-      const labelTr = getTriggerByLabel(/complaint\s*category.*food\s*agg/i) ||
-                      getTriggerByLabel(/complaint\s*category|^category$/i);
+      // Label-based: match Food Agg specifically, never Supermarket
+      const labelTr = getTriggerByLabel(/complaint\s*category\s*food\s*agg/i);
       if (labelTr && document.body.contains(labelTr)) return labelTr;
+
+      // Fallback: search all complaint category triggers but SKIP any with "supermarket" in data-test-id or title
+      const fallbackSelectors = [
+        '[data-test-id*="cf_complaint_category" i]:not([data-test-id*="buddy" i]):not([data-test-id*="supermarket" i])',
+        '[data-test-id*="complaint_category" i]:not([data-test-id*="buddy" i]):not([data-test-id*="supermarket" i])',
+        '[title*="Complaint Category" i]:not([title*="Buddy" i]):not([title*="Supermarket" i])'
+      ];
+      tr = pickBestTrigger(fallbackSelectors);
+      if (tr) return tr;
+
+      // Last resort: try label but skip any that mention supermarket
+      const fallbackLabel = getTriggerByLabel(/complaint\s*category(?!.*supermarket)/i);
+      if (fallbackLabel && document.body.contains(fallbackLabel)) return fallbackLabel;
     }
 
-    // 5. Complaint Details (Level 2)
+    // 5. Complaint Details Food Agg (Level 2) — ONLY target Food Agg, SKIP Supermarket
     if (norm === 'complaint details' || norm === 'complaint detail' || (norm.includes('complaint') && (norm.includes('detail') || norm.includes('sub'))) || norm === 'detail' || norm === 'details' || norm.includes('sub_category') || norm.includes('subcategory')) {
       const l1Tr = findDropdownTrigger('Complaint Category');
       const selectors = [
@@ -394,24 +400,25 @@
         '[data-test-id*="complaint_details_food_agg" i]',
         '[data-test-id*="cf_complaint_details_food_agg" i]',
         '[title*="Complaint Details Food Agg" i]',
-        '.nested-sub-fields [data-test-id="level-2"]',
-        '.nested-fields [data-test-id="level-2"]',
-        '[data-test-id="level-2" i]',
-        '[data-test-id*="level-2" i]',
-        '[data-test-id*="level_2" i]',
-        '[data-test-id*="complaint_details" i]:not([data-test-id*="buddy" i])',
-        '[data-test-id*="complaint details" i]:not([data-test-id*="buddy" i])',
-        '[data-test-id*="cf_complaint_details" i]:not([data-test-id*="buddy" i])',
-        '[title*="Complaint Details" i]:not([title*="Buddy" i])',
-        '[title*="Sub Category" i]',
-        '[data-test-id*="sub_category" i]',
-        '[data-test-id*="cf_sub_category" i]',
-        '[title*="Details" i]'
+        '[title="Complaint Details Food Agg" i]'
       ];
-      const tr = pickBestTrigger(selectors, l1Tr);
+      let tr = pickBestTrigger(selectors, l1Tr);
       if (tr) return tr;
 
-      // Check 2nd trigger in nested field containers if present
+      // Label-based: match Food Agg specifically, never Supermarket
+      const labelTr = getTriggerByLabel(/complaint\s*detail.*food\s*agg/i);
+      if (labelTr && document.body.contains(labelTr) && labelTr !== l1Tr) return labelTr;
+
+      // Fallback: search all complaint details triggers but SKIP any with "supermarket" in data-test-id or title
+      const fallbackSelectors = [
+        '[data-test-id*="complaint_details" i]:not([data-test-id*="buddy" i]):not([data-test-id*="supermarket" i])',
+        '[data-test-id*="cf_complaint_details" i]:not([data-test-id*="buddy" i]):not([data-test-id*="supermarket" i])',
+        '[title*="Complaint Details" i]:not([title*="Buddy" i]):not([title*="Supermarket" i])'
+      ];
+      tr = pickBestTrigger(fallbackSelectors, l1Tr);
+      if (tr) return tr;
+
+      // Nested container fallback
       const nestedContainer = document.querySelector('.nested-sub-fields, .nested-fields, .nested-field-group, [data-test-id*="nested" i]');
       if (nestedContainer) {
         const triggers = Array.from(nestedContainer.querySelectorAll('.ember-power-select-trigger'));
@@ -420,9 +427,9 @@
         }
       }
 
-      const labelTr = getTriggerByLabel(/complaint\s*detail.*food\s*agg/i) ||
-                      getTriggerByLabel(/complaint\s*detail|sub\s*category|subcategory|sub-category|^details?$|^issue$/i);
-      if (labelTr && document.body.contains(labelTr) && labelTr !== l1Tr) return labelTr;
+      // Last resort label fallback, skip supermarket
+      const fallbackLabel = getTriggerByLabel(/complaint\s*detail(?!.*supermarket)/i);
+      if (fallbackLabel && document.body.contains(fallbackLabel) && fallbackLabel !== l1Tr) return fallbackLabel;
 
       if (l1Tr) {
         const nextTr = getDropdownFollowing(l1Tr);
@@ -796,6 +803,35 @@
           // Dispatch full pointer and mouse events
           mouseClick(matched);
 
+          // Force-close the dropdown overlay after selection to prevent it staying stuck open
+          setTimeout(() => {
+            try {
+              // Press Escape on the trigger to tell Ember to close the dropdown
+              const escTarget = trigger || matched;
+              escTarget.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Escape', code: 'Escape', keyCode: 27, which: 27 }));
+              escTarget.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, cancelable: true, key: 'Escape', code: 'Escape', keyCode: 27, which: 27 }));
+            } catch (e) { }
+            try {
+              // Forcefully hide any remaining open dropdown content
+              const owns = trigger ? (trigger.getAttribute('aria-owns') || trigger.getAttribute('aria-controls')) : null;
+              if (owns) {
+                const dd = document.getElementById(owns);
+                if (dd) dd.style.display = 'none';
+              }
+              document.querySelectorAll('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed)').forEach(dd => {
+                if (dd.offsetParent !== null) {
+                  try { dd.style.display = 'none'; } catch (e) { }
+                }
+              });
+            } catch (e) { }
+            // Blur active element to ensure clean state
+            try {
+              if (document.activeElement && document.activeElement !== document.body) {
+                document.activeElement.blur();
+              }
+            } catch (e) { }
+          }, 80);
+
           // If there is an active search input, press Enter and blur to ensure Ember commits
           const sInp = (trigger ? trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') : null) ||
                        (activeContent ? activeContent.querySelector('input.ember-power-select-search-input, input') : null);
@@ -1107,7 +1143,7 @@
           await new Promise(r => setTimeout(r, 300));
 
           if (detailOk) {
-            showToast(`✓ [Complaints] ${category} > ${detail}${subDetail ? ' > ' + subDetail : ''} applied!`, 'info');
+            // Success toast suppressed — only show errors
             return true;
           } else {
             console.log('[BF Extension] Could not select Complaint Details:', detail);
@@ -1180,7 +1216,7 @@
           setTicketSubject(category, detail, subDetail);
         }
         await new Promise(r => setTimeout(r, 300));
-        showToast(`✓ [Feedback] ${fbType || category}${fbCategory ? ' > ' + fbCategory : ''}${fbDetails ? ' > ' + fbDetails : ''} applied!`, 'info');
+        // Success toast suppressed — only show errors
         return true;
       } else if ((treeType || '').toLowerCase().includes('internal')) {
         if (category) {
@@ -1219,7 +1255,7 @@
           setTicketSubject(category, detail, subDetail);
         }
         await new Promise(r => setTimeout(r, 300));
-        showToast(`✓ [Internal Requests] ${category}${detail ? ' > ' + detail : ''} applied!`, 'info');
+        // Success toast suppressed — only show errors
         return true;
       }
 
@@ -2044,6 +2080,97 @@
     window.addEventListener('scroll', () => scanAndCacheTicketData(), { passive: true });
     window.addEventListener('popstate', () => scanAndCacheTicketData(true));
 
+    // =========================================================================
+    // Auto Scroll-to-Top Helper
+    // Scrolls the page & sidebar containers to the top so that ticket fields
+    // (Customer ID, Order Number, UID, etc.) become visible in the DOM before
+    // data extraction. Returns a promise that resolves after the scroll + a
+    // short wait for Freshdesk to render the sidebar fields.
+    // =========================================================================
+    const scrollToTicketTop = () => {
+      return new Promise((resolve) => {
+        // 0. Close any open Freshdesk dropdowns & blur active element FIRST
+        //    This prevents ember-power-select dropdowns from staying stuck open
+        try {
+          // Close all open ember-power-select dropdown overlays
+          const openDropdowns = document.querySelectorAll(
+            '.ember-power-select-dropdown, .ember-basic-dropdown-content, ' +
+            '.ember-power-select-options, [role="listbox"]'
+          );
+          openDropdowns.forEach(dd => {
+            try { dd.style.display = 'none'; } catch (e) { }
+            try { dd.remove(); } catch (e) { }
+          });
+
+          // Remove the open class from any triggers that are marked open
+          document.querySelectorAll(
+            '.ember-power-select-trigger[aria-expanded="true"], ' +
+            '.ember-basic-dropdown-trigger[aria-expanded="true"]'
+          ).forEach(tr => {
+            try { tr.setAttribute('aria-expanded', 'false'); } catch (e) { }
+          });
+
+          // Send Escape key to dismiss any overlay/modal/dropdown
+          document.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true
+          }));
+
+          // Blur the currently focused element
+          if (document.activeElement && document.activeElement !== document.body) {
+            try { document.activeElement.blur(); } catch (e) { }
+          }
+
+          // Close extension's own flyout menus (tree, autofill, sheets, system)
+          document.querySelectorAll('.bf-tree-menu, .bf-sheets-menu, .bf-system-menu').forEach(m => {
+            try { m.style.display = 'none'; } catch (e) { }
+          });
+        } catch (e) { }
+
+        // 1. Scroll the main window / document to top
+        window.scrollTo({ top: 0, behavior: 'instant' });
+        document.documentElement.scrollTop = 0;
+        document.body.scrollTop = 0;
+
+        // 2. Scroll common Freshdesk scrollable containers to top
+        const scrollableSelectors = [
+          '.app-main', '.page-content', '.ticket-details',
+          '.sidebar-content', '#ticket-properties', '.ticket-properties',
+          '[data-test-id="ticket-details"]', '[data-test-id="properties-widget"]',
+          '.ticket-detail-page', '.ticket-pane', '.main-content',
+          '.conversation-pane', '.ticket-body'
+        ];
+        scrollableSelectors.forEach(sel => {
+          const els = document.querySelectorAll(sel);
+          els.forEach(el => {
+            try { el.scrollTop = 0; } catch (e) { }
+          });
+        });
+
+        // 3. Also scroll any parent scrollable containers of the sidebar
+        const sidebar = document.querySelector(
+          '.ticket-properties, #ticket-properties, .sidebar-content, ' +
+          '[data-test-id*="properties" i], aside'
+        );
+        if (sidebar) {
+          let parent = sidebar.parentElement;
+          let depth = 0;
+          while (parent && parent !== document.body && depth < 10) {
+            if (parent.scrollTop > 0) {
+              try { parent.scrollTop = 0; } catch (e) { }
+            }
+            parent = parent.parentElement;
+            depth++;
+          }
+        }
+
+        // 4. Wait briefly for Freshdesk SPA to re-render visible fields, then re-scan cache
+        setTimeout(() => {
+          scanAndCacheTicketData();
+          resolve();
+        }, 350);
+      });
+    };
+
     const openTicketPage = (btnEl, origText, extraParams = {}) => {
       btnEl.textContent = 'Creating...';
 
@@ -2509,7 +2636,11 @@
       }
     }
 
-    chatBtn.addEventListener('click', () => handleChat(chatBtn));
+    chatBtn.addEventListener('click', async () => {
+      // Scroll to top so customer phone/UID/order link are visible before extraction
+      await scrollToTicketTop();
+      handleChat(chatBtn);
+    });
 
     function handleCalculateDelay(btnEl) {
       if (btnEl.dataset.loading === 'true') return;
@@ -4695,7 +4826,10 @@ Have a good day.`
     // =========================================================================
     // SMS Dashboard Button
     // =========================================================================
-    smsBtn.addEventListener('click', () => {
+    smsBtn.addEventListener('click', async () => {
+      // Scroll to top so customer ID / order ID are visible before extraction
+      await scrollToTicketTop();
+
       const customerId = extractCustomerId();
       const orderId = extractWpOrderId();
 
@@ -4752,10 +4886,8 @@ Have a good day.`
             label: 'Product Quality',
             children: [
               { label: 'Oily' },
-              { label: 'Discoloration' },
               { label: 'Dry' },
               { label: 'Soft' },
-              { label: 'Used before' },
               { label: 'Eggy/Fishy smell' },
               { label: 'Chemical smell' },
               { label: 'Battery life' },
@@ -4816,9 +4948,7 @@ Have a good day.`
               { label: 'Wrong item' },
               { label: 'Wrong add-on' },
               { label: 'Wrong side item' },
-              { label: '# of product per pack less than promised' },
-              { label: 'Missing gift bag' },
-              { label: 'Gift Package' }
+              { label: '# of product per pack less than promised' }
             ]
           },
           {
@@ -4882,16 +5012,12 @@ Have a good day.`
           {
             label: 'Promotions & Rewards Issues',
             children: [
-              { label: 'Points not added' },
               { label: 'Coupon used in undelivered order - cannot be used again' },
-              { label: 'User cannot redeem points' },
               { label: 'User cannot apply coupon' },
               { label: 'Not eligible to use the coupon' },
               { label: 'Misleading details' },
               { label: 'Instant discount coupon not reflected' },
-              { label: 'Cashback coupon not relfected' },
-              { label: "Referral didn't receive cashback" },
-              { label: "Referee didn't receive discount" }
+              { label: 'Cashback coupon not reflected' }
             ]
           }
         ]
@@ -4961,6 +5087,7 @@ Have a good day.`
               { label: 'Bills Payment' },
               { label: 'Undefined/General' },
               { label: 'Boycott' },
+              { label: 'Unsealed bag' },
               { label: 'Other' }
             ]
           },
@@ -4969,13 +5096,6 @@ Have a good day.`
             children: [
               { label: 'Suggestion' },
               { label: 'Other' }
-            ]
-          },
-          {
-            label: 'Unsealed bag',
-            children: [
-              { label: 'Positive' },
-              { label: 'Negative' }
             ]
           },
           { label: 'BCard' }
@@ -5051,8 +5171,13 @@ Have a good day.`
     const closeAllTreeMenus = () => {
       if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (rootMenu) rootMenu.style.display = 'none';
+      // Close submenus inside treeWrapper
       const allSubmenus = treeWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
       allSubmenus.forEach(sm => sm.style.display = 'none');
+      // Also close any stray .bf-tree-menu anywhere in the document (position:fixed menus can escape wrapper)
+      document.querySelectorAll('.bf-tree-menu').forEach(sm => {
+        sm.style.display = 'none';
+      });
       Object.keys(activeSubmenusByDepth).forEach(k => delete activeSubmenusByDepth[k]);
       treeWrapper.querySelectorAll('.bf-tree-item').forEach(el => {
         el.style.backgroundColor = 'transparent';
@@ -5244,7 +5369,7 @@ Have a good day.`
             itemEl.style.backgroundColor = 'transparent';
           });
 
-          itemEl.addEventListener('click', (e) => {
+          itemEl.addEventListener('click', async (e) => {
             e.stopPropagation();
             closeAllTreeMenus();
 
@@ -5260,6 +5385,8 @@ Have a good day.`
             if (window.location.pathname.startsWith('/a/tickets/new')) {
               applyTreeToForm(treeType, category, detail, subDetail);
             } else {
+              // Scroll to top so ticket fields (ID, order, UID) are visible before extraction
+              await scrollToTicketTop();
               openTicketPage(treeBtn, 'Tree', {
                 bf_tree_type: treeType,
                 bf_category: category,
@@ -6013,7 +6140,7 @@ Have a good day.`
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
       const ok = await applyTreeToForm(treeType, category, detail, subDetail);
       if (ok) {
-        showToast(`✓ Auto Fill Complete: ${category || treeType}${detail ? ' > ' + detail : ''}${subDetail ? ' > ' + subDetail : ''}`, 'info');
+        // Success toast suppressed — only show errors
       }
     };
 
@@ -6161,9 +6288,12 @@ Have a good day.`
             itemEl.style.backgroundColor = 'transparent';
           });
 
-          itemEl.addEventListener('click', (e) => {
+          itemEl.addEventListener('click', async (e) => {
             e.stopPropagation();
             closeAllAutoFillMenus();
+
+            // Scroll to top so ticket fields are visible before auto-fill extraction
+            await scrollToTicketTop();
 
             const currentPath = [...path, item.label];
             const treeType = currentPath[0] || 'Complaints';
