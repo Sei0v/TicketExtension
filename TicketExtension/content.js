@@ -1003,6 +1003,8 @@
     let updateTreeMenuPosition = null;
     let updateAutoFillMenuPosition = null;
     let updateSheetsMenuPosition = null;
+    let updateSystemMenuPosition = null;
+    let closeSystemMenu = null;
     try {
       currentSide = localStorage.getItem('bf_buttons_position') || 'right';
     } catch (e) { }
@@ -1035,6 +1037,9 @@
       }
       if (typeof updateSheetsMenuPosition === 'function') {
         updateSheetsMenuPosition(side);
+      }
+      if (typeof updateSystemMenuPosition === 'function') {
+        updateSystemMenuPosition(side);
       }
     };
 
@@ -3758,10 +3763,13 @@ Have a good day.`
       `;
 
       const titleWrap = document.createElement('div');
-      titleWrap.style.cssText = 'display:flex; align-items:center; gap:8px;';
+      titleWrap.style.cssText = 'display:flex; align-items:center; gap:12px;';
       titleWrap.innerHTML = `
         <div>
-          <div style="font-weight: 700; font-size: 13px; color: #f8fafc;">Email Templates</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-weight: 700; font-size: 13px; color: #f8fafc;">Email Templates</span>
+            <a href="https://docs.google.com/document/d/1pD1azNjn2PeNx2sDQQNxDuhXVvLoGdP2XJpUYP7vohM/edit?pli=1&tab=t.0" target="_blank" rel="noopener noreferrer" style="font-size: 11px; color: #c4b5fd; text-decoration: none; border: 1px solid rgba(167, 139, 250, 0.4); padding: 1px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; background: rgba(124, 58, 237, 0.2);" title="Open Google Docs Email Templates">📄 Docs ↗</a>
+          </div>
           <div style="font-size: 11px; color: #94a3b8;" id="bf-email-cairo-info">Cairo Time: <span id="bf-email-cairo-time-text" style="color:#ec4899; font-weight:700;">${cairoData.timeFormatted}</span> (Auto: Good <span id="bf-email-auto-greeting">${cairoData.greeting}</span>)</div>
         </div>
       `;
@@ -4590,7 +4598,7 @@ Have a good day.`
       const styleEl = document.createElement('style');
       styleEl.id = 'bf-tree-menu-styles';
       styleEl.textContent = `
-        .bf-tree-menu::-webkit-scrollbar, .bf-sheets-menu::-webkit-scrollbar {
+        .bf-tree-menu::-webkit-scrollbar, .bf-sheets-menu::-webkit-scrollbar, .bf-system-menu::-webkit-scrollbar {
           width: 5px;
         }
         .bf-tree-menu::-webkit-scrollbar-track, .bf-sheets-menu::-webkit-scrollbar-track {
@@ -4611,6 +4619,7 @@ Have a good day.`
     const activeSubmenusByDepth = {};
 
     const closeAllTreeMenus = () => {
+      if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (rootMenu) rootMenu.style.display = 'none';
       const allSubmenus = treeWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
       allSubmenus.forEach(sm => sm.style.display = 'none');
@@ -4843,6 +4852,9 @@ Have a good day.`
 
     treeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (typeof closeSystemMenu === 'function') {
+        closeSystemMenu();
+      }
       if (typeof closeAllSheetsMenus === 'function') {
         closeAllSheetsMenus();
       }
@@ -4903,6 +4915,7 @@ Have a good day.`
     const activeAutoFillSubmenusByDepth = {};
 
     const closeAllAutoFillMenus = () => {
+      if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (autoFillRootMenu) autoFillRootMenu.style.display = 'none';
       const allSubmenus = autoFillWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
       allSubmenus.forEach(sm => sm.style.display = 'none');
@@ -5170,46 +5183,63 @@ Have a good day.`
         if (tr) return tr;
       } else {
         // 3. Complaints L2 (Complaint Details Food Agg)
-        // Direct scoped selectors for Food Agg Details
-        const tr = document.querySelector(
-          '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-          '[data-test-id*="cf_complaint_details_food_agg" i] .ember-power-select-trigger, ' +
-          '[data-test-id*="complaint_details_food_agg" i] .ember-power-select-trigger, ' +
-          '[title*="Complaint Details Food Agg" i] ~ .ember-power-select-trigger, ' +
-          '[title*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger, ' +
-          '.nested-sub-fields .ember-power-select-trigger, ' +
-          '[data-test-id="level-2"] .ember-power-select-trigger'
-        );
-        if (tr) return tr;
+        const l1Tr = getLiveLevel1Trigger(treeType);
 
-        // Selectors strictly avoiding buddy
+        // A. Primary: Check findDropdownTrigger('Complaint Details')
+        const fdTr = findDropdownTrigger('Complaint Details');
+        if (fdTr && document.body.contains(fdTr) && fdTr !== l1Tr) return fdTr;
+
+        // B. Direct scoped selectors for Food Agg Details (MUST NOT be l1Tr)
+        const directSelectors = [
+          '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger',
+          '[data-test-id*="cf_complaint_details_food_agg" i] .ember-power-select-trigger',
+          '[data-test-id*="complaint_details_food_agg" i] .ember-power-select-trigger',
+          '[title*="Complaint Details Food Agg" i] ~ .ember-power-select-trigger',
+          '[title*="Complaint Details Food Agg" i] .ember-power-select-trigger',
+          '.nested-sub-fields [data-test-id="level-2"] .ember-power-select-trigger',
+          '.nested-fields [data-test-id="level-2"] .ember-power-select-trigger',
+          '[data-test-id="level-2"] .ember-power-select-trigger'
+        ];
+        for (const sel of directSelectors) {
+          const el = document.querySelector(sel);
+          if (el && document.body.contains(el) && el !== l1Tr) return el;
+        }
+
+        // C. Check nested field container 2nd trigger
+        const nestedContainer = document.querySelector('.nested-sub-fields, .nested-fields, .nested-field-group, [data-test-id*="nested" i]');
+        if (nestedContainer) {
+          const triggers = Array.from(nestedContainer.querySelectorAll('.ember-power-select-trigger'));
+          if (triggers.length >= 2 && triggers[1] !== l1Tr && document.body.contains(triggers[1])) {
+            return triggers[1];
+          }
+        }
+
+        // D. Selectors strictly avoiding buddy and l1Tr
         const candTrs = Array.from(document.querySelectorAll(
-          '[data-test-id*="complaint_details" i], [data-test-id*="cf_complaint_details" i], [title*="Complaint Details" i]'
+          '[data-test-id*="complaint_details" i], [data-test-id*="cf_complaint_details" i], [title*="Complaint Details" i], [data-test-id*="sub_category" i], [title*="Sub Category" i]'
         ));
         for (const el of candTrs) {
           const attr = ((el.getAttribute('data-test-id') || '') + ' ' + (el.getAttribute('title') || '')).toLowerCase();
           if (!attr.includes('buddy')) {
             const trigger = el.classList.contains('ember-power-select-trigger') ? el : el.querySelector('.ember-power-select-trigger');
-            if (trigger) return trigger;
+            if (trigger && document.body.contains(trigger) && trigger !== l1Tr) return trigger;
           }
         }
 
-        // Label matching (strict: must NOT match Buddy)
+        // E. Label matching (strict: must NOT match Buddy and must not be l1Tr)
         const byLabel = findFieldTriggerByLabel(/complaint\s*detail.*food\s*agg/i) ||
-                        findFieldTriggerByLabel(/^complaint\s*details?$/i);
-        if (byLabel) return byLabel;
+                        findFieldTriggerByLabel(/^complaint\s*details?$/i) ||
+                        findFieldTriggerByLabel(/^sub\s*category$/i);
+        if (byLabel && byLabel !== l1Tr) return byLabel;
+
+        // F. Dropdown immediately following Level 1
+        if (l1Tr) {
+          const nextTr = getDropdownFollowing(l1Tr);
+          if (nextTr && nextTr !== l1Tr && document.body.contains(nextTr)) return nextTr;
+        }
       }
 
-      return document.querySelector(
-        '[data-test-id*="Complaint Details Food Agg" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_complaint_details_food_agg" i] .ember-power-select-trigger, ' +
-        '[data-test-id="level-2"] .ember-power-select-trigger, ' +
-        '[data-test-id*="Complaint Details" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_complaint_details" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_feedback_details" i] .ember-power-select-trigger, ' +
-        '[data-test-id*="cf_internal_details" i] .ember-power-select-trigger'
-      );
+      return null;
     };
 
     const getLiveLevel3Trigger = (treeType = '') => {
@@ -5226,7 +5256,7 @@ Have a good day.`
       );
     };
 
-    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 4500) => {
+    const setDropdownValue = async (getTriggerFn, targetValue, maxWaitMs = 5000) => {
       if (!getTriggerFn || !targetValue) return false;
       const norm = (s) => (s || '').trim().toLowerCase()
         .replace(/resturant/g, 'restaurant')
@@ -5245,7 +5275,7 @@ Have a good day.`
         }
         const curClean = curText.replace(/[^a-z0-9]/g, '');
         if (!curClean) return false;
-        return curClean === targetClean || curText === target;
+        return curClean === targetClean || curText === target || curClean.startsWith(targetClean) || targetClean.startsWith(curClean);
       };
 
       // Fast-path: Check immediately if trigger exists and already selected
@@ -5253,6 +5283,18 @@ Have a good day.`
       if (trigger && isAlreadySelected(trigger)) {
         return true;
       }
+
+      const dispatchClick = (el) => {
+        if (!el) return;
+        ['mousedown', 'mouseup', 'click'].forEach(type => {
+          try {
+            el.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+          } catch (e) { }
+        });
+        try {
+          if (typeof el.click === 'function') el.click();
+        } catch (e) { }
+      };
 
       const startWait = Date.now();
       // 1. Wait for trigger to be rendered, attached to DOM, and NOT disabled
@@ -5275,9 +5317,9 @@ Have a good day.`
 
       // 2. Open dropdown and find matching option
       const startFind = Date.now();
-      let matched = false;
       let lastClickTime = 0;
       let searched = false;
+      let openCycles = 0;
 
       while (Date.now() - startFind < maxWaitMs) {
         const liveTr = getTriggerFn();
@@ -5290,21 +5332,24 @@ Have a good day.`
         }
 
         if (isTriggerDisabled(trigger)) {
-          await new Promise(r => setTimeout(r, 30));
+          await new Promise(r => setTimeout(r, 40));
           continue;
         }
 
         const open = isDropdownOpen(trigger);
 
         // If dropdown closed or hasn't opened yet, open it
-        if (!open && Date.now() - lastClickTime > 180) {
+        if (!open && Date.now() - lastClickTime > 200) {
           lastClickTime = Date.now();
-          clickElement(trigger);
-          await new Promise(r => setTimeout(r, 40));
+          dispatchClick(trigger);
+          await new Promise(r => setTimeout(r, 50));
           continue;
         }
 
-        const allOptions = Array.from(document.querySelectorAll('.ember-power-select-option, [role="option"]'));
+        // Active dropdown content
+        const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
+        const container = openDropdown || document;
+        const allOptions = Array.from(container.querySelectorAll('.ember-power-select-option, [role="option"]'));
 
         const hasLoadingMsg = allOptions.some(o => o.classList.contains('ember-power-select-option--loading-message'));
         if (hasLoadingMsg) {
@@ -5317,16 +5362,12 @@ Have a good day.`
                  !o.classList.contains('ember-power-select-option--no-matches-message');
         });
 
-        if (validOptions.length === 0) {
-          await new Promise(r => setTimeout(r, 30));
-          continue;
-        }
-
-        // 1. Exact match
+        // 1. Exact or clean match
         let match = validOptions.find(o => {
           const t = norm(o.textContent);
           if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
-          return t === target || t.replace(/[^a-z0-9]/g, '') === targetClean;
+          const tClean = t.replace(/[^a-z0-9]/g, '');
+          return t === target || tClean === targetClean;
         });
 
         // 2. Starts with / includes match
@@ -5334,7 +5375,10 @@ Have a good day.`
           match = validOptions.find(o => {
             const t = norm(o.textContent);
             if (!t || t === '--' || t.startsWith('select') || t.includes('choose')) return false;
-            return t.startsWith(target) || target.startsWith(t) || t.includes(target) || target.includes(t);
+            const tClean = t.replace(/[^a-z0-9]/g, '');
+            return tClean.startsWith(targetClean) || targetClean.startsWith(tClean) ||
+                   t.includes(target) || target.includes(t) ||
+                   tClean.includes(targetClean) || targetClean.includes(tClean);
           });
         }
 
@@ -5343,25 +5387,26 @@ Have a good day.`
           if (list) {
             try { list.scrollTop = match.offsetTop - list.offsetTop; } catch (e) { }
           }
-          clickElement(match);
-          matched = true;
+          dispatchClick(match);
 
           // Poll for Ember to reflect selection
           const confirmStart = Date.now();
-          while (Date.now() - confirmStart < 600) {
+          while (Date.now() - confirmStart < 700) {
             await new Promise(r => setTimeout(r, 40));
             const postTr = getTriggerFn() || trigger;
             if (isAlreadySelected(postTr)) {
               return true;
             }
           }
-          return true;
+          const postTr = getTriggerFn() || trigger;
+          if (isAlreadySelected(postTr)) {
+            return true;
+          }
         }
 
-        // Fallback: search input if options list is filtered
-        if (Date.now() - startFind > 350 && !searched && open) {
+        // If open and match not found after 400ms, try typing in search input
+        if (Date.now() - startFind > 400 && !searched && open) {
           searched = true;
-          const openDropdown = document.querySelector('.ember-basic-dropdown-content:not(.ember-basic-dropdown-content--closed), .ember-power-select-dropdown');
           const searchInput = openDropdown ? openDropdown.querySelector('.ember-power-select-search-input') : null;
           if (searchInput) {
             const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -5369,15 +5414,28 @@ Have a good day.`
             else searchInput.value = targetValue;
             searchInput.dispatchEvent(new Event('input', { bubbles: true }));
             searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+            await new Promise(r => setTimeout(r, 60));
+            continue;
           }
         }
 
-        await new Promise(r => setTimeout(r, 30));
+        // If dropdown is open for over 650ms without match, toggle close and reopen to refresh options from Ember store
+        if (open && !match && Date.now() - lastClickTime > 650 && openCycles < 2) {
+          openCycles++;
+          lastClickTime = Date.now();
+          dispatchClick(trigger);
+          await new Promise(r => setTimeout(r, 80));
+          dispatchClick(trigger);
+          await new Promise(r => setTimeout(r, 80));
+          continue;
+        }
+
+        await new Promise(r => setTimeout(r, 35));
       }
 
-      await new Promise(r => setTimeout(r, 40));
+      await new Promise(r => setTimeout(r, 50));
       const finalTr = getTriggerFn() || trigger;
-      return isAlreadySelected(finalTr) || matched;
+      return isAlreadySelected(finalTr);
     };
 
     const executeAutoFillTree = async (treeType, category, detail, subDetail = '') => {
@@ -5526,19 +5584,21 @@ Have a good day.`
 
         if (l1NeedsChange) {
           console.log(`[Auto Fill] Setting Level 1 to "${category}"...`);
-          await setDropdownValue(getL1, category, 4000);
-          // IMPORTANT: Give Ember time to dispatch AJAX and invalidate old Level 2
-          await new Promise(r => setTimeout(r, 300));
-          if (detail) {
-            const startWaitL2 = Date.now();
-            while (Date.now() - startWaitL2 < 4000) {
-              const l2Tr = getL2();
-              if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
-                await new Promise(r => setTimeout(r, 150));
-                break;
-              }
-              await new Promise(r => setTimeout(r, 50));
+          await setDropdownValue(getL1, category, 4500);
+          // Give Freshdesk time to process Category selection and dispatch dependent Level 2 options
+          await new Promise(r => setTimeout(r, 350));
+        }
+
+        // Wait for Level 2 trigger to become ready and enabled
+        if (detail) {
+          const startWaitL2 = Date.now();
+          while (Date.now() - startWaitL2 < 3500) {
+            const l2Tr = getL2();
+            if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
+              await new Promise(r => setTimeout(r, 120));
+              break;
             }
+            await new Promise(r => setTimeout(r, 40));
           }
         }
       }
@@ -5549,10 +5609,20 @@ Have a good day.`
         let l2Ok = false;
         for (let attempt = 0; attempt < 3 && !l2Ok; attempt++) {
           if (attempt > 0) {
-            await new Promise(r => setTimeout(r, 200));
+            console.log(`[Auto Fill] Retrying Level 2 "${detail}" (attempt ${attempt + 1})...`);
+            await new Promise(r => setTimeout(r, 250));
           }
-          l2Ok = await setDropdownValue(getL2, detail, 4000);
+          l2Ok = await setDropdownValue(getL2, detail, 4500);
         }
+
+        // Fallback: If still not selected, try findDropdownTrigger('Complaint Details') directly
+        if (!l2Ok) {
+          console.warn(`[Auto Fill] Level 2 not selected yet, trying fallback trigger...`);
+          await new Promise(r => setTimeout(r, 200));
+          const fallbackL2 = () => findDropdownTrigger('Complaint Details') || getL2();
+          l2Ok = await setDropdownValue(fallbackL2, detail, 3500);
+        }
+
         if (!l2Ok) {
           console.warn(`[Auto Fill] Could not select Level 2: "${detail}"`);
         }
@@ -5649,13 +5719,12 @@ Have a good day.`
           autoFillWrapper.appendChild(childMenu);
           itemEl._childMenu = childMenu;
 
-          itemEl.addEventListener('mouseenter', () => {
+          const positionAndShowChildMenu = () => {
             closeAutoFillSubmenusFromDepth(depth + 1);
-            itemEl.style.backgroundColor = '#334155';
+            activeAutoFillSubmenusByDepth[depth + 1] = childMenu;
 
             const rect = itemEl.getBoundingClientRect();
             childMenu.style.display = 'block';
-            activeAutoFillSubmenusByDepth[depth + 1] = childMenu;
 
             const childWidth = 240;
             if (currentSide === 'right') {
@@ -5676,6 +5745,36 @@ Have a good day.`
               top = Math.max(10, window.innerHeight - menuHeight - 15);
             }
             childMenu.style.top = `${Math.round(top)}px`;
+          };
+
+          // Hover ONLY highlights the item; it NEVER opens or closes menus automatically
+          itemEl.addEventListener('mouseenter', () => {
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = '#334155';
+            }
+          });
+
+          itemEl.addEventListener('mouseleave', () => {
+            if (childMenu.style.display !== 'block') {
+              itemEl.style.backgroundColor = 'transparent';
+            }
+          });
+
+          // Click opens and locks the submenu open until another click occurs
+          itemEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (childMenu.style.display === 'block') {
+              closeAutoFillSubmenusFromDepth(depth + 1);
+              itemEl.style.backgroundColor = 'transparent';
+            } else {
+              listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
+                if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
+                  sib.style.backgroundColor = 'transparent';
+                }
+              });
+              itemEl.style.backgroundColor = '#2563eb';
+              positionAndShowChildMenu();
+            }
           });
         } else {
           // Leaf item
@@ -5713,6 +5812,7 @@ Have a good day.`
 
     autoFillBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (typeof closeAllTreeMenus === 'function') closeAllTreeMenus();
       if (typeof closeAllSheetsMenus === 'function') closeAllSheetsMenus();
       const isOpen = autoFillRootMenu.style.display === 'block';
@@ -5752,7 +5852,7 @@ Have a good day.`
     // Sheets Button & Cascading Flyout Menu (KB & Shifts)
     // =========================================================================
     const sheetsBtn = createBtn('btn-sheets-menu', 'Sheets', '#7c3aed');
-    sheetsBtn.title = 'Google Sheets Shortcuts (KB & Shifts)';
+    sheetsBtn.title = 'Google Sheets & Forms Shortcuts (KB, Shift forms, Other sheets)';
     sheetsBtn.style.width = '100%';
     sheetsBtn.style.display = 'flex';
     sheetsBtn.style.justifyContent = 'center';
@@ -5766,43 +5866,457 @@ Have a good day.`
 
     // Google Sheets URLs dictionary (Populate with target sheet links)
     const SHEETS_URLS = {
-      kb_rating: '',
-      kb_retention: '',
-      kb_rider: '',
-      kb_chat: '',
-      shifts_swap_shift: '',
-      shifts_swap_off: '',
-      shifts_vacation: '',
-      shifts_off_queue: '',
-      shifts_late: ''
+      kb_rating: 'https://docs.google.com/spreadsheets/d/1qJBXU8k_t7GgcGegzhdDsMqkyZDrvuhDbYRPIad25sk/edit?pli=1&gid=0#gid=0',
+      kb_reopened: 'https://docs.google.com/spreadsheets/d/1LzfAFLWplqdtly-gVwz4AFjhawwhkSN3vZi-iHXsaTg/edit?pli=1&gid=207913064#gid=207913064',
+      kb_retention: 'https://docs.google.com/spreadsheets/d/1phbOrYG0t8ea_K4qO86eIsfk_IVq1uG8JR7_3w_og90/htmlview?pli=1#gid=475268211',
+      kb_rider: 'https://docs.google.com/spreadsheets/d/11d6VMGif0175bzHGkYMffywbZS6oJrS2tW0tPJQu-cI/edit?gid=1998717658#gid=1998717658',
+      kb_restaurant: 'https://docs.google.com/spreadsheets/d/1H-veWjDFNZq0abj4bSK7cLjYAJrCCuUmgSdDEWT19Hg/edit?gid=1998717658#gid=1998717658',
+      kb_chat: 'https://docs.google.com/spreadsheets/d/17bnnu7cWnM6v4n_yHo2-gNK2xgVOpFOuO0r1TEYNjxs/edit?gid=402216287#gid=402216287',
+      shifts_swap_shift: 'https://forms.gle/gn5nRzJra7KuGUEu7',
+      shifts_swap_off: 'https://forms.gle/h36ahHieaxQt9Pme6',
+      shifts_off_queue: 'https://forms.gle/vomT2VU9p5qe2vBr9',
+      shifts_late: 'https://docs.google.com/forms/d/e/1FAIpQLSdXf3bPbGxBB2zTzZMZlew6pyPjYVVtHDrFimNtw7hLF7-QKw/viewform',
+      shifts_vacation: 'https://forms.gle/ywCWYJ7jSXdz5rmq8',
+      other_agent_view: 'https://docs.google.com/spreadsheets/d/130vrNrMBOyVjIYfzUBhmbc_hzdfLiHKkBLYlOtchRRE/edit?gid=1597923501#gid=1597923501',
+      other_email_templates: 'https://docs.google.com/document/d/1pD1azNjn2PeNx2sDQQNxDuhXVvLoGdP2XJpUYP7vohM/edit?pli=1&tab=t.0',
+      other_map: 'https://www.google.com/maps/d/u/0/viewer?ll=30.035282403089514%2C31.383135323902362&z=12&mid=1s-ecYuJYk9BV8utlc7CjJTeGI2O4q-M',
+      other_abuser_form: 'https://docs.google.com/forms/d/e/1FAIpQLSdSQ85y36IkviLADoxLYjA9xlayUQ3QdnIc2UgbiHi0iGMeIw/viewform?pli=1',
+      other_abuser_responses: 'https://docs.google.com/spreadsheets/d/1bPzCxTxk8IR4ghpvlPyFP6XSDzEammxZOLJLqJUTHbU/edit?resourcekey=&gid=420644289#gid=420644289'
     };
 
-    const sheetsData = [
-      {
-        label: 'KB',
-        children: [
-          { label: 'Rating', key: 'kb_rating' },
-          { label: 'Retention', key: 'kb_retention' },
-          { label: 'Rider', key: 'kb_rider' },
-          { label: 'Chat', key: 'kb_chat' }
-        ]
-      },
-      {
-        label: 'Shifts',
-        children: [
-          { label: 'Swap shift', key: 'shifts_swap_shift' },
-          { label: 'Swap off', key: 'shifts_swap_off' },
-          { label: 'Vacation', key: 'shifts_vacation' },
-          { label: 'Off queue', key: 'shifts_off_queue' },
-          { label: 'Late', key: 'shifts_late' }
-        ]
+    // Custom Links Storage Helpers
+    const getStoredCustomLinks = (callback) => {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['bf_custom_sheets_links'], (res) => {
+          if (!chrome.runtime.lastError && res && Array.isArray(res.bf_custom_sheets_links)) {
+            callback(res.bf_custom_sheets_links);
+            return;
+          }
+          try {
+            const val = JSON.parse(localStorage.getItem('bf_custom_sheets_links') || '[]');
+            callback(Array.isArray(val) ? val : []);
+          } catch (e) {
+            callback([]);
+          }
+        });
+      } else {
+        try {
+          const val = JSON.parse(localStorage.getItem('bf_custom_sheets_links') || '[]');
+          callback(Array.isArray(val) ? val : []);
+        } catch (e) {
+          callback([]);
+        }
       }
-    ];
+    };
+
+    const saveStoredCustomLinks = (links, callback) => {
+      try {
+        localStorage.setItem('bf_custom_sheets_links', JSON.stringify(links));
+      } catch (e) {}
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ bf_custom_sheets_links: links }, () => {
+          if (callback) callback();
+        });
+      } else {
+        if (callback) callback();
+      }
+    };
+
+    let customLinksList = [];
+    try {
+      const initialSaved = localStorage.getItem('bf_custom_sheets_links');
+      if (initialSaved) customLinksList = JSON.parse(initialSaved) || [];
+    } catch (e) {}
 
     let rootSheetsMenu = null;
+    let rebuildSheetsMenu = null;
     const activeSheetsSubmenusByDepth = {};
 
+    getStoredCustomLinks((links) => {
+      if (Array.isArray(links)) {
+        customLinksList = links;
+        if (typeof rebuildSheetsMenu === 'function') {
+          rebuildSheetsMenu();
+        }
+      }
+    });
+
+    const openAddCustomLinkModal = () => {
+      closeAllSheetsMenus();
+
+      const existing = document.getElementById('bf-custom-link-backdrop');
+      if (existing) existing.remove();
+
+      if (!document.getElementById('bf-custom-link-style')) {
+        const style = document.createElement('style');
+        style.id = 'bf-custom-link-style';
+        style.textContent = `
+          @keyframes bfFadeInCustomBackdrop {
+            from { opacity: 0; }
+            to { opacity: 1; }
+          }
+          @keyframes bfFadeInCustomModal {
+            from { opacity: 0; transform: scale(0.96) translateY(-6px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      // Backdrop overlay
+      const backdrop = document.createElement('div');
+      backdrop.id = 'bf-custom-link-backdrop';
+      backdrop.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(15, 23, 42, 0.65);
+        backdrop-filter: blur(4px);
+        z-index: 2147483645;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: bfFadeInCustomBackdrop 0.15s ease-out;
+      `;
+
+      // Modal container
+      const modal = document.createElement('div');
+      modal.id = 'bf-custom-link-modal';
+      modal.style.cssText = `
+        background: #1e293b;
+        color: #f8fafc;
+        width: 440px;
+        max-width: calc(100vw - 40px);
+        border-radius: 12px;
+        border: 1px solid #334155;
+        box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        animation: bfFadeInCustomModal 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      `;
+
+      // Header
+      const header = document.createElement('div');
+      header.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 18px;
+        background: #0f172a;
+        border-bottom: 1px solid #334155;
+        user-select: none;
+      `;
+
+      const titleWrap = document.createElement('div');
+      titleWrap.style.cssText = 'display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; color: #f8fafc;';
+      titleWrap.innerHTML = '<span style="color:#c084fc; font-size: 16px;">🔗</span> Add Custom Link';
+
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button';
+      closeBtn.textContent = '✕';
+      closeBtn.title = 'Close (Esc)';
+      closeBtn.style.cssText = `
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: color 0.15s, background 0.15s;
+      `;
+      closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#fff'; closeBtn.style.background = '#334155'; });
+      closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#94a3b8'; closeBtn.style.background = 'transparent'; });
+
+      header.appendChild(titleWrap);
+      header.appendChild(closeBtn);
+      modal.appendChild(header);
+
+      // Body Form
+      const body = document.createElement('div');
+      body.style.cssText = 'padding: 18px; display: flex; flex-direction: column; gap: 14px;';
+
+      // Input 1: Button Name
+      const nameGroup = document.createElement('div');
+      nameGroup.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
+      const nameLabel = document.createElement('label');
+      nameLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #cbd5e1;';
+      nameLabel.textContent = 'Button Name / Label:';
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.placeholder = 'e.g., Team Tracker, Shift Schedule...';
+      nameInput.style.cssText = `
+        padding: 8px 12px;
+        background: #0f172a;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        color: #fff;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      `;
+      nameInput.addEventListener('focus', () => {
+        nameInput.style.borderColor = '#a855f7';
+        nameInput.style.boxShadow = '0 0 0 2px rgba(168, 85, 247, 0.25)';
+      });
+      nameInput.addEventListener('blur', () => {
+        nameInput.style.borderColor = '#475569';
+        nameInput.style.boxShadow = 'none';
+      });
+      nameGroup.appendChild(nameLabel);
+      nameGroup.appendChild(nameInput);
+      body.appendChild(nameGroup);
+
+      // Input 2: URL
+      const urlGroup = document.createElement('div');
+      urlGroup.style.cssText = 'display: flex; flex-direction: column; gap: 6px;';
+      const urlLabel = document.createElement('label');
+      urlLabel.style.cssText = 'font-size: 12px; font-weight: 600; color: #cbd5e1;';
+      urlLabel.textContent = 'URL / Link:';
+      const urlInput = document.createElement('input');
+      urlInput.type = 'text';
+      urlInput.placeholder = 'https://docs.google.com/spreadsheets/d/...';
+      urlInput.style.cssText = `
+        padding: 8px 12px;
+        background: #0f172a;
+        border: 1px solid #475569;
+        border-radius: 6px;
+        color: #fff;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      `;
+      urlInput.addEventListener('focus', () => {
+        urlInput.style.borderColor = '#a855f7';
+        urlInput.style.boxShadow = '0 0 0 2px rgba(168, 85, 247, 0.25)';
+      });
+      urlInput.addEventListener('blur', () => {
+        urlInput.style.borderColor = '#475569';
+        urlInput.style.boxShadow = 'none';
+      });
+
+      const hintText = document.createElement('div');
+      hintText.style.cssText = 'font-size: 11px; color: #94a3b8; margin-top: 2px;';
+      hintText.textContent = 'Works with Google Sheets, Forms, Docs, or any web link.';
+
+      urlGroup.appendChild(urlLabel);
+      urlGroup.appendChild(urlInput);
+      urlGroup.appendChild(hintText);
+      body.appendChild(urlGroup);
+
+      // Error message container
+      const errorMsg = document.createElement('div');
+      errorMsg.style.cssText = 'font-size: 12px; color: #f87171; display: none; margin-top: -4px;';
+      body.appendChild(errorMsg);
+
+      // Footer Actions
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px;';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.textContent = 'Cancel';
+      cancelBtn.style.cssText = `
+        padding: 7px 14px;
+        background: #334155;
+        border: none;
+        border-radius: 6px;
+        color: #cbd5e1;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      `;
+      cancelBtn.addEventListener('mouseenter', () => { cancelBtn.style.background = '#475569'; cancelBtn.style.color = '#fff'; });
+      cancelBtn.addEventListener('mouseleave', () => { cancelBtn.style.background = '#334155'; cancelBtn.style.color = '#cbd5e1'; });
+
+      const saveBtn = document.createElement('button');
+      saveBtn.type = 'button';
+      saveBtn.textContent = 'Save Link';
+      saveBtn.style.cssText = `
+        padding: 7px 18px;
+        background: #7c3aed;
+        border: none;
+        border-radius: 6px;
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+        transition: filter 0.15s, transform 0.1s;
+      `;
+      saveBtn.addEventListener('mouseenter', () => { saveBtn.style.filter = 'brightness(1.1)'; });
+      saveBtn.addEventListener('mouseleave', () => { saveBtn.style.filter = 'brightness(1)'; });
+      saveBtn.addEventListener('mousedown', () => { saveBtn.style.transform = 'scale(0.97)'; });
+      saveBtn.addEventListener('mouseup', () => { saveBtn.style.transform = 'scale(1)'; });
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(saveBtn);
+      body.appendChild(actions);
+
+      modal.appendChild(body);
+      backdrop.appendChild(modal);
+      document.body.appendChild(backdrop);
+
+      setTimeout(() => nameInput.focus(), 50);
+
+      const closeDialog = () => {
+        window.removeEventListener('keydown', onKeyDown);
+        backdrop.remove();
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          closeDialog();
+        } else if (e.key === 'Enter') {
+          saveHandler();
+        }
+      };
+      window.addEventListener('keydown', onKeyDown);
+
+      closeBtn.addEventListener('click', closeDialog);
+      cancelBtn.addEventListener('click', closeDialog);
+      backdrop.addEventListener('click', (e) => {
+        if (e.target === backdrop) closeDialog();
+      });
+
+      const saveHandler = () => {
+        const nameVal = nameInput.value.trim();
+        let urlVal = urlInput.value.trim();
+
+        if (!nameVal) {
+          errorMsg.textContent = 'Please enter a name for the button.';
+          errorMsg.style.display = 'block';
+          nameInput.focus();
+          return;
+        }
+
+        if (!urlVal) {
+          errorMsg.textContent = 'Please enter a URL or link.';
+          errorMsg.style.display = 'block';
+          urlInput.focus();
+          return;
+        }
+
+        if (!/^https?:\/\//i.test(urlVal)) {
+          urlVal = 'https://' + urlVal;
+        }
+
+        const newLink = {
+          id: 'custom_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+          name: nameVal,
+          url: urlVal
+        };
+
+        customLinksList.push(newLink);
+        saveStoredCustomLinks(customLinksList, () => {
+          showToast(`Custom link "${nameVal}" added to Custom links!`, 'info');
+        });
+
+        if (typeof rebuildSheetsMenu === 'function') {
+          rebuildSheetsMenu();
+        }
+        closeDialog();
+      };
+
+      saveBtn.addEventListener('click', saveHandler);
+    };
+
+    const deleteCustomLink = (id, label) => {
+      if (!confirm(`Are you sure you want to remove "${label}" from Custom links?`)) {
+        return;
+      }
+      customLinksList = customLinksList.filter(l => l.id !== id);
+      saveStoredCustomLinks(customLinksList, () => {
+        showToast(`Custom link "${label}" removed.`, 'info');
+      });
+      if (typeof rebuildSheetsMenu === 'function') {
+        rebuildSheetsMenu();
+      }
+    };
+
+    const buildFullSheetsData = () => {
+      const customChildren = [];
+      if (customLinksList && customLinksList.length > 0) {
+        customLinksList.forEach(cl => {
+          customChildren.push({
+            label: cl.name,
+            url: cl.url,
+            id: cl.id,
+            isCustomLink: true
+          });
+        });
+        customChildren.push({ isDivider: true });
+      } else {
+        customChildren.push({
+          label: 'No custom links yet',
+          disabled: true
+        });
+        customChildren.push({ isDivider: true });
+      }
+      customChildren.push({
+        label: '+ Add Custom link',
+        action: 'add_custom',
+        highlight: true
+      });
+
+      return [
+        {
+          label: 'KB',
+          children: [
+            {
+              label: 'Rating',
+              children: [
+                { label: 'Rating', key: 'kb_rating' },
+                { label: 'Reopened KB', key: 'kb_reopened' }
+              ]
+            },
+            { label: 'Retention', key: 'kb_retention' },
+            { label: 'Rider', key: 'kb_rider' },
+            { label: 'Chat', key: 'kb_chat' },
+            { label: 'Restaurant', key: 'kb_restaurant' }
+          ]
+        },
+        {
+          label: 'Shift forms',
+          children: [
+            { label: 'Swap shift form', key: 'shifts_swap_shift' },
+            { label: 'Swap off form', key: 'shifts_swap_off' },
+            { label: 'Off queue form', key: 'shifts_off_queue' },
+            { label: 'Late login', key: 'shifts_late' },
+            { label: 'Vacation form', key: 'shifts_vacation' }
+          ]
+        },
+        {
+          label: 'Other sheets',
+          children: [
+            { label: 'Agent view', key: 'other_agent_view' },
+            { label: 'Email templates', key: 'other_email_templates' },
+            { label: 'Map', key: 'other_map' },
+            { label: 'Abuser form', key: 'other_abuser_form' },
+            { label: 'Abuser Form (Responses)', key: 'other_abuser_responses' }
+          ]
+        },
+        {
+          label: 'Custom links',
+          children: customChildren
+        },
+        { isDivider: true },
+        {
+          label: '+ Add Custom link',
+          action: 'add_custom',
+          highlight: true
+        }
+      ];
+    };
+
     const closeAllSheetsMenus = () => {
+      if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (rootSheetsMenu) rootSheetsMenu.style.display = 'none';
       const allSubmenus = sheetsWrapper.querySelectorAll('.bf-sheets-menu:not(.bf-sheets-menu-root)');
       allSubmenus.forEach(sm => sm.style.display = 'none');
@@ -5842,7 +6356,7 @@ Have a good day.`
       menu.style.userSelect = 'none';
       menu.style.display = 'none';
       menu.style.minWidth = isRoot ? '140px' : '170px';
-      menu.style.maxWidth = isRoot ? '180px' : '220px';
+      menu.style.maxWidth = isRoot ? '190px' : '250px';
 
       if (!isRoot) {
         menu.style.position = 'fixed';
@@ -5873,6 +6387,14 @@ Have a good day.`
       menu.appendChild(listContainer);
 
       items.forEach(item => {
+        if (item.isDivider) {
+          const div = document.createElement('div');
+          div.className = 'bf-sheets-divider';
+          div.style.cssText = 'height: 1px; background: rgba(255, 255, 255, 0.12); margin: 4px 2px;';
+          listContainer.appendChild(div);
+          return;
+        }
+
         const itemEl = document.createElement('div');
         itemEl.className = 'bf-sheets-item';
         itemEl.style.position = 'relative';
@@ -5881,18 +6403,30 @@ Have a good day.`
         itemEl.style.justifyContent = 'space-between';
         itemEl.style.padding = '6px 10px';
         itemEl.style.borderRadius = '5px';
-        itemEl.style.cursor = 'pointer';
+        itemEl.style.cursor = item.disabled ? 'default' : 'pointer';
         itemEl.style.transition = 'background-color 0.15s ease, color 0.15s ease';
         itemEl.style.whiteSpace = 'nowrap';
         itemEl.style.gap = '8px';
 
+        if (item.disabled) {
+          itemEl.style.color = '#94a3b8';
+          itemEl.style.fontStyle = 'italic';
+        } else if (item.highlight) {
+          itemEl.style.color = '#c084fc';
+        }
+
         const textSpan = document.createElement('span');
         textSpan.textContent = item.label;
-        textSpan.style.fontWeight = '500';
+        textSpan.style.fontWeight = item.highlight ? '600' : '500';
         textSpan.style.fontSize = '12px';
         textSpan.style.overflow = 'hidden';
         textSpan.style.textOverflow = 'ellipsis';
         itemEl.appendChild(textSpan);
+
+        if (item.disabled) {
+          listContainer.appendChild(itemEl);
+          return;
+        }
 
         if (item.children && item.children.length > 0) {
           const arrow = document.createElement('span');
@@ -5975,8 +6509,39 @@ Have a good day.`
           });
         } else {
           // Leaf item
+          if (item.isCustomLink) {
+            const deleteBtn = document.createElement('span');
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.title = 'Remove custom link';
+            deleteBtn.style.cssText = `
+              color: #94a3b8;
+              font-size: 15px;
+              line-height: 1;
+              padding: 0 4px;
+              border-radius: 4px;
+              cursor: pointer;
+              opacity: 0.5;
+              transition: color 0.15s, opacity 0.15s, background-color 0.15s;
+            `;
+            deleteBtn.addEventListener('mouseenter', () => {
+              deleteBtn.style.color = '#ef4444';
+              deleteBtn.style.opacity = '1';
+              deleteBtn.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+            });
+            deleteBtn.addEventListener('mouseleave', () => {
+              deleteBtn.style.color = '#94a3b8';
+              deleteBtn.style.opacity = '0.5';
+              deleteBtn.style.backgroundColor = 'transparent';
+            });
+            deleteBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              deleteCustomLink(item.id, item.label);
+            });
+            itemEl.appendChild(deleteBtn);
+          }
+
           itemEl.addEventListener('mouseenter', () => {
-            itemEl.style.backgroundColor = '#334155';
+            itemEl.style.backgroundColor = item.highlight ? 'rgba(124, 58, 237, 0.25)' : '#334155';
           });
           itemEl.addEventListener('mouseleave', () => {
             itemEl.style.backgroundColor = 'transparent';
@@ -5984,10 +6549,23 @@ Have a good day.`
 
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (item.action === 'add_custom') {
+              openAddCustomLinkModal();
+              return;
+            }
+
             closeAllSheetsMenus();
 
+            if (item.isCustomLink) {
+              if (item.url && typeof item.url === 'string' && item.url.trim().length > 0) {
+                showToast(`Opening [Custom links] ${item.label}...`, 'info');
+                window.open(item.url.trim(), '_blank', 'noopener,noreferrer');
+              }
+              return;
+            }
+
             const url = SHEETS_URLS[item.key];
-            const category = path[0] || 'Sheets';
+            const category = path.length > 0 ? path.join(' > ') : 'Sheets';
             if (url && typeof url === 'string' && url.trim().length > 0) {
               showToast(`Opening [${category}] ${item.label}...`, 'info');
               window.open(url.trim(), '_blank', 'noopener,noreferrer');
@@ -6003,11 +6581,28 @@ Have a good day.`
       return menu;
     };
 
-    rootSheetsMenu = buildSheetsSubmenu(sheetsData, true, []);
-    sheetsWrapper.appendChild(rootSheetsMenu);
+    rebuildSheetsMenu = () => {
+      const wasOpen = rootSheetsMenu && rootSheetsMenu.style.display === 'block';
+      closeAllSheetsMenus();
+      const existingMenus = sheetsWrapper.querySelectorAll('.bf-sheets-menu');
+      existingMenus.forEach(m => m.remove());
+      rootSheetsMenu = buildSheetsSubmenu(buildFullSheetsData(), true, []);
+      sheetsWrapper.appendChild(rootSheetsMenu);
+      if (typeof updateSheetsMenuPosition === 'function') {
+        updateSheetsMenuPosition(currentSide);
+      }
+      if (wasOpen) {
+        rootSheetsMenu.style.display = 'block';
+      }
+    };
+
+    rebuildSheetsMenu();
 
     sheetsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (typeof closeSystemMenu === 'function') {
+        closeSystemMenu();
+      }
       if (typeof closeAllTreeMenus === 'function') {
         closeAllTreeMenus();
       }
@@ -6047,6 +6642,143 @@ Have a good day.`
 
     updateSheetsMenuPosition(currentSide);
 
+    // =========================================================================
+    // System Button & Cascading Menu (Internal Systems: Switcher, Payment, SMS, Kairos)
+    // =========================================================================
+    const systemBtn = createBtn('btn-system-menu', 'System', '#0d9488');
+    systemBtn.title = 'Internal Systems & Portals';
+    systemBtn.style.width = '100%';
+    systemBtn.style.display = 'flex';
+    systemBtn.style.justifyContent = 'center';
+    systemBtn.style.alignItems = 'center';
+
+    const systemWrapper = document.createElement('div');
+    systemWrapper.id = 'bf-system-wrapper';
+    systemWrapper.style.position = 'relative';
+    systemWrapper.style.width = '100%';
+    systemWrapper.appendChild(systemBtn);
+
+    const SYSTEM_ITEMS = [
+      { label: 'Freshdesk', url: 'https://freshdesk.breadfast.com/' },
+      { label: 'Switcher', url: 'https://www.breadfast.com/switcher/' },
+      { label: 'Payment panel', url: 'https://payment-panel.breadfast.com/#/orders' },
+      { label: 'Coupons', url: 'https://www.breadfast.com/dashboard/coupons' },
+      { label: 'SMS', url: 'https://www.breadfast.com/dashboard/sms/create' },
+      { label: 'Kairos', url: 'https://kairos.breadfast.com/app/accounts/1/dashboard' }
+    ];
+
+    const systemMenu = document.createElement('div');
+    systemMenu.className = 'bf-system-menu';
+    systemMenu.style.backgroundColor = '#1e293b';
+    systemMenu.style.color = '#f8fafc';
+    systemMenu.style.borderRadius = '8px';
+    systemMenu.style.padding = '6px';
+    systemMenu.style.boxShadow = '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3)';
+    systemMenu.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    systemMenu.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    systemMenu.style.fontSize = '12px';
+    systemMenu.style.userSelect = 'none';
+    systemMenu.style.display = 'none';
+    systemMenu.style.minWidth = '140px';
+    systemMenu.style.maxWidth = '180px';
+    systemMenu.style.position = 'absolute';
+    systemMenu.style.zIndex = '1000000';
+    systemMenu.style.bottom = '0';
+
+    if (currentSide === 'right') {
+      systemMenu.style.right = 'calc(100% + 8px)';
+      systemMenu.style.left = 'auto';
+    } else {
+      systemMenu.style.left = 'calc(100% + 8px)';
+      systemMenu.style.right = 'auto';
+    }
+
+    const systemListContainer = document.createElement('div');
+    systemListContainer.className = 'bf-system-list-container';
+    systemListContainer.style.display = 'flex';
+    systemListContainer.style.flexDirection = 'column';
+    systemListContainer.style.gap = '2px';
+    systemMenu.appendChild(systemListContainer);
+
+    SYSTEM_ITEMS.forEach(item => {
+      const itemEl = document.createElement('div');
+      itemEl.className = 'bf-system-item';
+      itemEl.style.position = 'relative';
+      itemEl.style.display = 'flex';
+      itemEl.style.alignItems = 'center';
+      itemEl.style.padding = '6px 10px';
+      itemEl.style.borderRadius = '5px';
+      itemEl.style.cursor = 'pointer';
+      itemEl.style.transition = 'background-color 0.15s ease, color 0.15s ease';
+      itemEl.style.whiteSpace = 'nowrap';
+
+      const textSpan = document.createElement('span');
+      textSpan.textContent = item.label;
+      textSpan.style.fontWeight = '500';
+      textSpan.style.fontSize = '12px';
+      itemEl.appendChild(textSpan);
+
+      itemEl.addEventListener('mouseenter', () => {
+        itemEl.style.backgroundColor = '#334155';
+      });
+      itemEl.addEventListener('mouseleave', () => {
+        itemEl.style.backgroundColor = 'transparent';
+      });
+      itemEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSystemMenu();
+        showToast(`Opening [System] ${item.label}...`, 'info');
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+      });
+
+      systemListContainer.appendChild(itemEl);
+    });
+
+    systemWrapper.appendChild(systemMenu);
+
+    closeSystemMenu = () => {
+      if (systemMenu) systemMenu.style.display = 'none';
+      if (systemListContainer) {
+        systemListContainer.querySelectorAll('.bf-system-item').forEach(el => {
+          el.style.backgroundColor = 'transparent';
+        });
+      }
+    };
+
+    systemBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (typeof closeAllTreeMenus === 'function') closeAllTreeMenus();
+      if (typeof closeAllAutoFillMenus === 'function') closeAllAutoFillMenus();
+      if (typeof closeAllSheetsMenus === 'function') closeAllSheetsMenus();
+      const isOpen = systemMenu.style.display === 'block';
+      if (isOpen) {
+        closeSystemMenu();
+      } else {
+        closeSystemMenu();
+        systemMenu.style.display = 'block';
+      }
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!systemWrapper.contains(e.target)) {
+        closeSystemMenu();
+      }
+    });
+
+    updateSystemMenuPosition = (side) => {
+      if (!systemMenu) return;
+      if (side === 'right') {
+        systemMenu.style.right = 'calc(100% + 8px)';
+        systemMenu.style.left = 'auto';
+      } else {
+        systemMenu.style.left = 'calc(100% + 8px)';
+        systemMenu.style.right = 'auto';
+      }
+      closeSystemMenu();
+    };
+
+    updateSystemMenuPosition(currentSide);
+
     container.appendChild(headerRow);
 
     const createSectionDivider = () => {
@@ -6066,10 +6798,11 @@ Have a good day.`
 
     container.appendChild(createSectionDivider());
 
-    // Section 2: Customer & Operations (Calm Teal: RMS -> SMS -> Chat)
+    // Section 2: Customer & Operations (Calm Teal: RMS -> SMS -> Chat -> System)
     container.appendChild(rmsBtn);
     container.appendChild(smsBtn);
     container.appendChild(chatBtn);
+    container.appendChild(systemWrapper);
 
     container.appendChild(createSectionDivider());
 

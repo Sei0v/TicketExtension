@@ -5,7 +5,8 @@
   "description": "Adds Create Ticket, Senior Ticket, Tree Menu, RMS, Chat, and Delay Calculator buttons to Freshdesk ticket pages.",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "storage"
   ],
   "host_permissions": [
     "*://*.breadfast.com/*",
