@@ -1314,10 +1314,14 @@
       }
     } catch (e) { }
 
-    // 4. Remove current toolbar container
+    // 4. Remove current toolbar container and dock tab
     const oldContainer = document.getElementById('bf-custom-ticket-buttons');
     if (oldContainer) {
       try { oldContainer.remove(); } catch (e) { }
+    }
+    const oldTab = document.getElementById('bf-dock-toggle-tab');
+    if (oldTab) {
+      try { oldTab.remove(); } catch (e) { }
     }
 
     // 5. Rebuild toolbar cleanly
@@ -1370,6 +1374,11 @@
     if (!document.body) return;
     if (document.getElementById('bf-custom-ticket-buttons')) return;
 
+    const existingTab = document.getElementById('bf-dock-toggle-tab');
+    if (existingTab) {
+      try { existingTab.remove(); } catch (e) { }
+    }
+
     const container = document.createElement('div');
     container.id = 'bf-custom-ticket-buttons';
 
@@ -1380,9 +1389,10 @@
     container.style.flexDirection = 'column';
     container.style.gap = '6px';
     container.style.zIndex = '999999';
-    container.style.transition = 'left 0.25s ease, right 0.25s ease';
+    container.style.transition = 'left 0.25s ease, right 0.25s ease, transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
+    container.style.willChange = 'transform, opacity';
 
-    // Header row with Reset button and side toggle button (Left/Right)
+    // Header row with Reset button, side toggle button, and collapse button
     const headerRow = document.createElement('div');
     headerRow.style.display = 'flex';
     headerRow.style.width = '100%';
@@ -1459,6 +1469,91 @@
       toggleBtn.style.transform = 'scale(1)';
     });
 
+    // Collapse button on the toolbar header
+    const collapseBtn = document.createElement('button');
+    collapseBtn.id = 'bf-collapse-tool-btn';
+    collapseBtn.setAttribute('type', 'button');
+    collapseBtn.style.padding = '3px 7px';
+    collapseBtn.style.border = 'none';
+    collapseBtn.style.borderRadius = '4px';
+    collapseBtn.style.backgroundColor = '#4b5563';
+    collapseBtn.style.color = '#ffffff';
+    collapseBtn.style.fontSize = '11px';
+    collapseBtn.style.fontWeight = 'bold';
+    collapseBtn.style.cursor = 'pointer';
+    collapseBtn.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+    collapseBtn.style.transition = 'background-color 0.2s, transform 0.1s';
+    collapseBtn.style.lineHeight = '1.2';
+    collapseBtn.style.whiteSpace = 'nowrap';
+    collapseBtn.style.flexShrink = '0';
+
+    collapseBtn.addEventListener('mouseenter', () => {
+      collapseBtn.style.backgroundColor = '#2563eb';
+    });
+    collapseBtn.addEventListener('mouseleave', () => {
+      collapseBtn.style.backgroundColor = '#4b5563';
+    });
+    collapseBtn.addEventListener('mousedown', () => {
+      collapseBtn.style.transform = 'scale(0.93)';
+    });
+    collapseBtn.addEventListener('mouseup', () => {
+      collapseBtn.style.transform = 'scale(1)';
+    });
+
+    // Floating dock toggle tab on the screen edge (arrow tab)
+    const dockTab = document.createElement('button');
+    dockTab.id = 'bf-dock-toggle-tab';
+    dockTab.setAttribute('type', 'button');
+    dockTab.style.position = 'fixed';
+    dockTab.style.bottom = '220px';
+    dockTab.style.zIndex = '9999999';
+    dockTab.style.width = '24px';
+    dockTab.style.height = '48px';
+    dockTab.style.padding = '0';
+    dockTab.style.margin = '0';
+    dockTab.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+    dockTab.style.backgroundColor = '#1e293b';
+    dockTab.style.color = '#ffffff';
+    dockTab.style.cursor = 'pointer';
+    dockTab.style.display = 'flex';
+    dockTab.style.alignItems = 'center';
+    dockTab.style.justifyContent = 'center';
+    dockTab.style.fontSize = '13px';
+    dockTab.style.lineHeight = '1';
+    dockTab.style.userSelect = 'none';
+    dockTab.style.outline = 'none';
+    dockTab.style.transition = 'background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, left 0.25s ease, right 0.25s ease';
+
+    dockTab.addEventListener('mouseenter', () => {
+      dockTab.style.backgroundColor = '#2563eb';
+      dockTab.style.boxShadow = currentSide === 'right'
+        ? '-4px 2px 14px rgba(37, 99, 235, 0.5)'
+        : '4px 2px 14px rgba(37, 99, 235, 0.5)';
+      if (isCollapsed) {
+        dockTab.style.transform = currentSide === 'right' ? 'translateX(-3px)' : 'translateX(3px)';
+      }
+    });
+    dockTab.addEventListener('mouseleave', () => {
+      dockTab.style.backgroundColor = '#1e293b';
+      dockTab.style.boxShadow = currentSide === 'right'
+        ? '-3px 2px 10px rgba(0, 0, 0, 0.35)'
+        : '3px 2px 10px rgba(0, 0, 0, 0.35)';
+      dockTab.style.transform = 'translateX(0)';
+    });
+    dockTab.addEventListener('mousedown', () => {
+      dockTab.style.transform = 'scale(0.92)';
+    });
+    dockTab.addEventListener('mouseup', () => {
+      dockTab.style.transform = isCollapsed
+        ? (currentSide === 'right' ? 'translateX(-3px)' : 'translateX(3px)')
+        : 'translateX(0)';
+    });
+    dockTab.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      applyCollapsed(!isCollapsed);
+    });
+
     const getLeftOffset = () => {
       const sidebar = document.querySelector('nav, .app-nav-bar, .page-actions, aside, [role="navigation"]');
       if (sidebar) {
@@ -1467,10 +1562,11 @@
           return `${Math.round(rect.right + 15)}px`;
         }
       }
-      return '20px';
+      return '28px';
     };
 
     let currentSide = 'right';
+    let isCollapsed = false;
     let updateTreeMenuPosition = null;
     let updateAutoFillMenuPosition = null;
     let updateSheetsMenuPosition = null;
@@ -1479,6 +1575,53 @@
     try {
       currentSide = localStorage.getItem('bf_buttons_position') || 'right';
     } catch (e) { }
+    try {
+      isCollapsed = localStorage.getItem('bf_buttons_collapsed') === 'true';
+    } catch (e) { }
+
+    const applyCollapsed = (collapsed) => {
+      isCollapsed = !!collapsed;
+      try {
+        localStorage.setItem('bf_buttons_collapsed', isCollapsed ? 'true' : 'false');
+      } catch (e) { }
+
+      if (isCollapsed) {
+        if (typeof closeAllTreeMenus === 'function') closeAllTreeMenus();
+        if (typeof closeAllAutoFillMenus === 'function') closeAllAutoFillMenus();
+        if (typeof closeAllSheetsMenus === 'function') closeAllSheetsMenus();
+        if (typeof closeSystemMenu === 'function') closeSystemMenu();
+
+        if (currentSide === 'right') {
+          container.style.transform = 'translateX(calc(100% + 40px))';
+          dockTab.innerHTML = '&#9664;'; // ◀
+          dockTab.title = 'Show Freshdesk Tools (إظهار الأدوات)';
+        } else {
+          container.style.transform = 'translateX(calc(-100% - 40px))';
+          dockTab.innerHTML = '&#9654;'; // ▶
+          dockTab.title = 'Show Freshdesk Tools (إظهار الأدوات)';
+        }
+        container.style.opacity = '0';
+        container.style.pointerEvents = 'none';
+      } else {
+        container.style.transform = 'translateX(0)';
+        container.style.opacity = '1';
+        container.style.pointerEvents = 'auto';
+
+        if (currentSide === 'right') {
+          dockTab.innerHTML = '&#9654;'; // ▶
+          dockTab.title = 'Hide Freshdesk Tools (إخفاء الأدوات)';
+        } else {
+          dockTab.innerHTML = '&#9664;'; // ◀
+          dockTab.title = 'Hide Freshdesk Tools (إخفاء الأدوات)';
+        }
+      }
+    };
+
+    collapseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      applyCollapsed(true);
+    });
 
     const applyPosition = (side) => {
       currentSide = side;
@@ -1491,13 +1634,33 @@
         container.style.right = 'auto';
         toggleBtn.innerHTML = '⇄ &#9654;'; // ⇄ ▶
         toggleBtn.title = 'Move to right';
+        collapseBtn.innerHTML = '&#9664;'; // ◀
+        collapseBtn.title = 'Hide tools to left / إخفاء لليسار';
+
+        dockTab.style.left = '0';
+        dockTab.style.right = 'auto';
+        dockTab.style.borderLeft = 'none';
+        dockTab.style.borderRight = '1px solid rgba(255, 255, 255, 0.25)';
+        dockTab.style.borderRadius = '0 8px 8px 0';
+        dockTab.style.boxShadow = '3px 2px 10px rgba(0, 0, 0, 0.35)';
       } else {
-        container.style.right = '20px';
+        container.style.right = '28px';
         container.style.left = 'auto';
         toggleBtn.innerHTML = '&#9664; ⇄'; // ◀ ⇄
         toggleBtn.title = 'Move to left';
+        collapseBtn.innerHTML = '&#9654;'; // ▶
+        collapseBtn.title = 'Hide tools to right / إخفاء لليمين';
+
+        dockTab.style.right = '0';
+        dockTab.style.left = 'auto';
+        dockTab.style.borderRight = 'none';
+        dockTab.style.borderLeft = '1px solid rgba(255, 255, 255, 0.25)';
+        dockTab.style.borderRadius = '8px 0 0 8px';
+        dockTab.style.boxShadow = '-3px 2px 10px rgba(0, 0, 0, 0.35)';
       }
       headerRow.style.justifyContent = 'space-between';
+
+      applyCollapsed(isCollapsed);
 
       if (typeof updateTreeMenuPosition === 'function') {
         updateTreeMenuPosition(side);
@@ -1523,6 +1686,7 @@
     applyPosition(currentSide);
     headerRow.appendChild(resetBtn);
     headerRow.appendChild(toggleBtn);
+    headerRow.appendChild(collapseBtn);
 
     const createBtn = (id, text, color) => {
       const btn = document.createElement('button');
@@ -7355,6 +7519,7 @@ Have a good day.`
     container.appendChild(sheetsWrapper);
 
     document.body.appendChild(container);
+    document.body.appendChild(dockTab);
   }
 
   // =========================================================================
