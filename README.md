@@ -13,8 +13,7 @@
 
 ## Video
 
+https://github.com/user-attachments/assets/b3825aa9-5cfb-4295-bf9c-460b8f4d217c
 
-
-Uploading 2026-09-30 18-17-15.mp4…
 
 
