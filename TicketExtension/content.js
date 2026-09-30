@@ -1691,7 +1691,24 @@
       let name = '';
       let email = '';
 
-      // Strictly search within requester containers in header/sidebar, never conversation
+      // PRIORITY 1: Extract "Customer Name:" from ticket body/description
+      const ticketBody = document.querySelector(
+        '#ticket_original_request, .ticket-description, .ticket-body, ' +
+        '[data-test-id*="ticket-description" i], .ticket-content, .description-content, ' +
+        '.ticket-brightness-root'
+      );
+      if (ticketBody) {
+        const bodyText = ticketBody.innerText || ticketBody.textContent || '';
+        const custNameMatch = bodyText.match(/Customer\s*Name\s*:\s*(.+)/i);
+        if (custNameMatch && custNameMatch[1]) {
+          const extracted = custNameMatch[1].trim().split('\n')[0].trim();
+          if (extracted && extracted.length > 0 && extracted.length < 80) {
+            name = extracted;
+          }
+        }
+      }
+
+      // PRIORITY 2: Requester containers in header/sidebar
       const requesterContainers = Array.from(document.querySelectorAll(
         '[data-test-id*="requester" i], .ticket-requester-info, .requester-info, ' +
         '.requester-details, .ticket-details-header, .ticket-header, .requester-name, ' +
@@ -4229,28 +4246,9 @@ Have a good day.`
 
         firstWord = firstWord.replace(/[\u064B-\u065F\u0670]/g, '').trim();
 
-        // Check if contains Arabic characters -> Convert to English!
+        // If name contains Arabic characters, leave it empty for manual entry
         if (/[\u0600-\u06FF]/.test(firstWord)) {
-          // 1. Direct dictionary match
-          if (ARABIC_FIRST_NAME_MAP[firstWord]) {
-            return ARABIC_FIRST_NAME_MAP[firstWord];
-          }
-          // 2. Normalized dictionary match (alef, yaa, taa marbouta)
-          const normalized = firstWord
-            .replace(/[إأآا]/g, 'ا')
-            .replace(/[ىي]/g, 'ي')
-            .replace(/[ةه]/g, 'ه');
-          for (const key of Object.keys(ARABIC_FIRST_NAME_MAP)) {
-            const keyNorm = key
-              .replace(/[إأآا]/g, 'ا')
-              .replace(/[ىي]/g, 'ي')
-              .replace(/[ةه]/g, 'ه');
-            if (keyNorm === normalized) {
-              return ARABIC_FIRST_NAME_MAP[key];
-            }
-          }
-          // 3. Fallback transliteration
-          return transliterateArabicToLatin(firstWord);
+          return '';
         }
 
         // English name normalization (e.g. "AHMED" -> "Ahmed", "ahmed" -> "Ahmed")
