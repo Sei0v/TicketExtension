@@ -4607,7 +4607,27 @@ Have a good day.`
           ...extraInputValues
         };
 
-        previewText.value = tpl.render(params);
+        // Format: add blank lines between paragraphs for readability,
+        // but keep consecutive numbered list items (e.g. "1-", "2-") single-spaced
+        const rawEmail = tpl.render(params);
+        const lines = rawEmail.split('\n');
+        let formatted = '';
+        for (let i = 0; i < lines.length; i++) {
+          formatted += lines[i];
+          if (i < lines.length - 1) {
+            const nextLine = lines[i + 1].trimStart();
+            const currentLine = lines[i].trimStart();
+            // Keep numbered list items single-spaced (e.g. "1-", "2-", "3)")
+            const isNumberedCurrent = /^\d+[\-\)\.]/.test(currentLine);
+            const isNumberedNext = /^\d+[\-\)\.]/.test(nextLine);
+            if (isNumberedCurrent && isNumberedNext) {
+              formatted += '\n';
+            } else {
+              formatted += '\n\n';
+            }
+          }
+        }
+        previewText.value = formatted;
       };
 
       // Category Change Event
@@ -4891,7 +4911,6 @@ Have a good day.`
               { label: 'Eggy/Fishy smell' },
               { label: 'Chemical smell' },
               { label: 'Battery life' },
-              { label: 'Atomizer not working' },
               { label: 'Filling' },
               { label: 'Freshness' },
               { label: 'Size' },
