@@ -1323,6 +1323,9 @@
     if (oldTab) {
       try { oldTab.remove(); } catch (e) { }
     }
+    try {
+      localStorage.removeItem('bf_buttons_collapsed');
+    } catch (e) { }
 
     // 5. Rebuild toolbar cleanly
     ensureButtons();
@@ -1389,8 +1392,7 @@
     container.style.flexDirection = 'column';
     container.style.gap = '6px';
     container.style.zIndex = '999999';
-    container.style.transition = 'left 0.25s ease, right 0.25s ease, transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease';
-    container.style.willChange = 'transform, opacity';
+    container.style.transition = 'left 0.25s ease, right 0.25s ease, opacity 0.2s ease';
 
     // Header row with Reset button, side toggle button, and collapse button
     const headerRow = document.createElement('div');
@@ -1571,6 +1573,9 @@
     let updateAutoFillMenuPosition = null;
     let updateSheetsMenuPosition = null;
     let updateSystemMenuPosition = null;
+    let closeAllTreeMenus = null;
+    let closeAllAutoFillMenus = null;
+    let closeAllSheetsMenus = null;
     let closeSystemMenu = null;
     try {
       currentSide = localStorage.getItem('bf_buttons_position') || 'right';
@@ -1592,28 +1597,32 @@
         if (typeof closeSystemMenu === 'function') closeSystemMenu();
 
         if (currentSide === 'right') {
-          container.style.transform = 'translateX(calc(100% + 40px))';
+          container.style.right = '-260px';
+          container.style.left = 'auto';
           dockTab.innerHTML = '&#9664;'; // ◀
           dockTab.title = 'Show Freshdesk Tools (إظهار الأدوات)';
         } else {
-          container.style.transform = 'translateX(calc(-100% - 40px))';
+          container.style.left = '-260px';
+          container.style.right = 'auto';
           dockTab.innerHTML = '&#9654;'; // ▶
           dockTab.title = 'Show Freshdesk Tools (إظهار الأدوات)';
         }
         container.style.opacity = '0';
         container.style.pointerEvents = 'none';
       } else {
-        container.style.transform = 'translateX(0)';
-        container.style.opacity = '1';
-        container.style.pointerEvents = 'auto';
-
         if (currentSide === 'right') {
+          container.style.right = '28px';
+          container.style.left = 'auto';
           dockTab.innerHTML = '&#9654;'; // ▶
           dockTab.title = 'Hide Freshdesk Tools (إخفاء الأدوات)';
         } else {
+          container.style.left = getLeftOffset();
+          container.style.right = 'auto';
           dockTab.innerHTML = '&#9664;'; // ◀
           dockTab.title = 'Hide Freshdesk Tools (إخفاء الأدوات)';
         }
+        container.style.opacity = '1';
+        container.style.pointerEvents = 'auto';
       }
     };
 
@@ -1630,7 +1639,7 @@
       } catch (e) { }
 
       if (side === 'left') {
-        container.style.left = getLeftOffset();
+        container.style.left = isCollapsed ? '-260px' : getLeftOffset();
         container.style.right = 'auto';
         toggleBtn.innerHTML = '⇄ &#9654;'; // ⇄ ▶
         toggleBtn.title = 'Move to right';
@@ -1644,7 +1653,7 @@
         dockTab.style.borderRadius = '0 8px 8px 0';
         dockTab.style.boxShadow = '3px 2px 10px rgba(0, 0, 0, 0.35)';
       } else {
-        container.style.right = '28px';
+        container.style.right = isCollapsed ? '-260px' : '28px';
         container.style.left = 'auto';
         toggleBtn.innerHTML = '&#9664; ⇄'; // ◀ ⇄
         toggleBtn.title = 'Move to left';
@@ -5349,7 +5358,7 @@ Have a good day.`
     let rootMenu = null;
     const activeSubmenusByDepth = {};
 
-    const closeAllTreeMenus = () => {
+    closeAllTreeMenus = () => {
       if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (rootMenu) rootMenu.style.display = 'none';
       // Close submenus inside treeWrapper
@@ -5652,7 +5661,7 @@ Have a good day.`
     let autoFillRootMenu = null;
     const activeAutoFillSubmenusByDepth = {};
 
-    const closeAllAutoFillMenus = () => {
+    closeAllAutoFillMenus = () => {
       if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (autoFillRootMenu) autoFillRootMenu.style.display = 'none';
       const allSubmenus = autoFillWrapper.querySelectorAll('.bf-tree-menu:not(.bf-tree-menu-root)');
@@ -7021,7 +7030,7 @@ Have a good day.`
       ];
     };
 
-    const closeAllSheetsMenus = () => {
+    closeAllSheetsMenus = () => {
       if (typeof closeSystemMenu === 'function') closeSystemMenu();
       if (rootSheetsMenu) rootSheetsMenu.style.display = 'none';
       const allSubmenus = sheetsWrapper.querySelectorAll('.bf-sheets-menu:not(.bf-sheets-menu-root)');
