@@ -631,7 +631,7 @@
       if (isAborted()) return false;
       trigger = getLiveTrigger();
       if (trigger) break;
-      await new Promise(r => setTimeout(r, 40));
+      await new Promise(r => setTimeout(r, 15));
     }
 
     if (isAborted()) return false;
@@ -803,7 +803,7 @@
           // Dispatch full pointer and mouse events
           mouseClick(matched);
 
-          // Force-close the dropdown overlay after selection to prevent it staying stuck open
+          // Force-close the dropdown overlay quickly after selection to prevent it staying stuck open
           setTimeout(() => {
             try {
               // Press Escape on the trigger to tell Ember to close the dropdown
@@ -830,7 +830,7 @@
                 document.activeElement.blur();
               }
             } catch (e) { }
-          }, 80);
+          }, 25);
 
           // If there is an active search input, press Enter and blur to ensure Ember commits
           const sInp = (trigger ? trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') : null) ||
@@ -842,7 +842,15 @@
             } catch (e) { }
             setTimeout(() => {
               try { sInp.blur(); } catch (e) { }
-            }, 60);
+            }, 15);
+          }
+
+          // Immediate check: if already committed, resolve right away!
+          const initTr = getLiveTrigger() || trigger;
+          if (isDropdownSelected(initTr, optionText) ||
+              (matched && (matched.getAttribute('aria-selected') === 'true' || matched.classList.contains('ember-power-select-option--selected')))) {
+            resolve(true);
+            return;
           }
 
           // Actively poll to verify Ember has registered and committed the selection
@@ -855,8 +863,8 @@
               resolve(true);
               return;
             }
-            if (Date.now() - confirmStart < 800) {
-              if (Date.now() - confirmStart > 320 && Date.now() - confirmStart < 370) {
+            if (Date.now() - confirmStart < 600) {
+              if (Date.now() - confirmStart > 180 && Date.now() - confirmStart < 220) {
                 mouseClick(matched);
                 if (sInp) {
                   try {
@@ -865,18 +873,18 @@
                   } catch (e) { }
                 }
               }
-              setTimeout(pollConfirmation, 40);
+              setTimeout(pollConfirmation, 15);
             } else {
               const finalTr = getLiveTrigger() || trigger;
               resolve(isDropdownSelected(finalTr, optionText));
             }
           };
-          setTimeout(pollConfirmation, 40);
+          setTimeout(pollConfirmation, 15);
           return;
         }
 
-        // If not found after ~180ms, try typing in search input (in trigger or dropdown content)
-        if (attempts > 5 && !searched && currentlyOpen) {
+        // If not found after ~150ms, try typing in search input (in trigger or dropdown content)
+        if (attempts > 10 && !searched && currentlyOpen) {
           searched = true;
           const searchInput = (trigger ? trigger.querySelector('input.ember-power-select-search-input, input[type="search"], input[type="text"], input') : null) ||
                               (activeContent ? activeContent.querySelector('input.ember-power-select-search-input, input') : null);
@@ -897,7 +905,7 @@
         }
 
         attempts++;
-        if (attempts > 60) {
+        if (attempts > 120) {
           clearInterval(checkIv);
           if (isDropdownSelected(trigger, optionText)) {
             resolve(true);
@@ -905,7 +913,7 @@
             resolve(false);
           }
         }
-      }, 35);
+      }, 15);
     });
   };
 
@@ -1045,7 +1053,7 @@
           const buOk = await assertDropdown('Business unit', 'Food Aggregation', 6000);
           if (isAborted()) return false;
           if (buOk) {
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, 40));
           }
         }
       }
@@ -1060,7 +1068,7 @@
           await assertDropdown('Type', treeType, 6000);
           if (isAborted()) return false;
           // Wait for Ember to re-render properties after Type change
-          await new Promise(r => setTimeout(r, 400));
+          await new Promise(r => setTimeout(r, 50));
           if (isAborted()) return false;
         }
       }
@@ -1073,7 +1081,7 @@
           if (isAborted()) return false;
           const l1Tr = findDropdownTrigger('Complaint Category');
           if (l1Tr && document.body.contains(l1Tr) && !isTriggerDisabled(l1Tr)) break;
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise(r => setTimeout(r, 15));
         }
         if (isAborted()) return false;
 
@@ -1085,14 +1093,12 @@
             let catOk = false;
             for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
               if (isAborted()) return false;
-              if (attempt > 0) await new Promise(r => setTimeout(r, 300));
+              if (attempt > 0) await new Promise(r => setTimeout(r, 80));
               catOk = await assertDropdown('Complaint Category', category, 6000);
             }
             if (isAborted()) return false;
-            // CRITICAL: Freshdesk Ember fires an AJAX request upon category selection
-            // to fetch dependent options for Complaint Details Food Agg.
-            // We must wait for Ember to process this change.
-            await new Promise(r => setTimeout(r, 400));
+            // Short pause for Ember to fetch dependent options
+            await new Promise(r => setTimeout(r, 60));
             if (isAborted()) return false;
           }
         }
@@ -1104,10 +1110,10 @@
             if (isAborted()) return false;
             const l2Tr = findDropdownTrigger('Complaint Details');
             if (l2Tr && document.body.contains(l2Tr) && !isTriggerDisabled(l2Tr)) {
-              await new Promise(r => setTimeout(r, 120));
+              await new Promise(r => setTimeout(r, 20));
               break;
             }
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 15));
           }
           if (isAborted()) return false;
 
@@ -1116,20 +1122,20 @@
           for (let attempt = 0; attempt < 4 && !detailOk; attempt++) {
             if (isAborted()) return false;
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 300));
+              await new Promise(r => setTimeout(r, 80));
             }
             detailOk = await assertDropdown('Complaint Details', detail, 6000);
           }
 
           if (subDetail) {
-            await new Promise(r => setTimeout(r, 250));
+            await new Promise(r => setTimeout(r, 40));
             if (isAborted()) return false;
             const waitL3Start = Date.now();
             while (Date.now() - waitL3Start < 3000) {
               if (isAborted()) return false;
               const l3Tr = findDropdownTrigger('Quality');
               if (l3Tr && document.body.contains(l3Tr) && !isTriggerDisabled(l3Tr)) break;
-              await new Promise(r => setTimeout(r, 50));
+              await new Promise(r => setTimeout(r, 15));
             }
             if (isAborted()) return false;
             await assertDropdown('Quality', subDetail, 6000);
@@ -1140,7 +1146,7 @@
           }
 
           // Allow Ember run-loop to commit model changes before returning
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 30));
 
           if (detailOk) {
             // Success toast suppressed — only show errors
@@ -1172,10 +1178,10 @@
         if (fbType) {
           let fbTypeOk = false;
           for (let attempt = 0; attempt < 3 && !fbTypeOk; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 200));
+            if (attempt > 0) await new Promise(r => setTimeout(r, 60));
             fbTypeOk = await assertDropdown('Feedback Type', fbType, 5000);
           }
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 40));
         }
 
         if (fbCategory) {
@@ -1184,17 +1190,17 @@
             if (isAborted()) return false;
             const tr = findDropdownTrigger('Feedback') || findDropdownTrigger('Feedback Category');
             if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 15));
           }
           let catOk = false;
           for (let attempt = 0; attempt < 3 && !catOk; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 250));
+            if (attempt > 0) await new Promise(r => setTimeout(r, 60));
             catOk = await assertDropdown('Feedback', fbCategory, 5000);
             if (!catOk) {
               catOk = await assertDropdown('Feedback Category', fbCategory, 3000);
             }
           }
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 40));
         }
 
         if (fbDetails) {
@@ -1203,11 +1209,11 @@
             if (isAborted()) return false;
             const tr = findDropdownTrigger('Feedback Details');
             if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 15));
           }
           let detOk = false;
           for (let attempt = 0; attempt < 3 && !detOk; attempt++) {
-            if (attempt > 0) await new Promise(r => setTimeout(r, 250));
+            if (attempt > 0) await new Promise(r => setTimeout(r, 60));
             detOk = await assertDropdown('Feedback Details', fbDetails, 5000);
           }
         }
@@ -1215,20 +1221,20 @@
         if (isNewTicketPage) {
           setTicketSubject(category, detail, subDetail);
         }
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 30));
         // Success toast suppressed — only show errors
         return true;
       } else if ((treeType || '').toLowerCase().includes('internal')) {
         if (category) {
           let catOk = false;
           for (let cTry = 0; cTry < 3 && !catOk; cTry++) {
-            if (cTry > 0) await new Promise(r => setTimeout(r, 200));
+            if (cTry > 0) await new Promise(r => setTimeout(r, 60));
             catOk = await assertDropdown('Internal Request Type', category, 3000);
             if (!catOk) {
               catOk = await assertDropdown('Internal Request Category', category, 2000);
             }
           }
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 40));
         }
 
         if (detail) {
@@ -1237,12 +1243,12 @@
             if (isAborted()) return false;
             const tr = findDropdownTrigger('Internal Request') || findDropdownTrigger('Internal Request Details');
             if (tr && document.body.contains(tr) && !isTriggerDisabled(tr)) break;
-            await new Promise(r => setTimeout(r, 50));
+            await new Promise(r => setTimeout(r, 15));
           }
           let detailOk = false;
           for (let attempt = 0; attempt < 3 && !detailOk; attempt++) {
             if (attempt > 0) {
-              await new Promise(r => setTimeout(r, 250));
+              await new Promise(r => setTimeout(r, 60));
             }
             detailOk = await assertDropdown('Internal Request', detail, 3000);
             if (!detailOk) {
@@ -1254,7 +1260,7 @@
         if (isNewTicketPage) {
           setTicketSubject(category, detail, subDetail);
         }
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 30));
         // Success toast suppressed — only show errors
         return true;
       }
@@ -2357,7 +2363,7 @@
         setTimeout(() => {
           scanAndCacheTicketData();
           resolve();
-        }, 350);
+        }, 40);
       });
     };
 
@@ -3330,6 +3336,7 @@
 
       const CATEGORIES = [
         'All Categories',
+        '✨ Custom Emails',
         'No Answer & Contact',
         'Food & Quality',
         'Packaging & Items',
@@ -4098,6 +4105,47 @@ Have a good day.`
             background: #475569;
             border-radius: 4px;
           }
+          .bf-email-mode-tab {
+            padding: 6px 12px;
+            background: #0f172a;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            outline: none;
+          }
+          .bf-email-mode-tab:hover {
+            color: #f8fafc;
+            background: #1e293b;
+            border-color: #475569;
+          }
+          .bf-email-mode-tab.active {
+            background: #7c3aed;
+            color: #ffffff;
+            border-color: #a78bfa;
+            box-shadow: 0 2px 8px rgba(124, 58, 237, 0.4);
+          }
+          .bf-custom-checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #cbd5e1;
+            cursor: pointer;
+            user-select: none;
+          }
+          .bf-custom-checkbox-label input {
+            cursor: pointer;
+            accent-color: #7c3aed;
+          }
         `;
         document.head.appendChild(styleEl);
       }
@@ -4446,6 +4494,58 @@ Have a good day.`
         agentName = localStorage.getItem('bf_agent_name') || '';
       } catch (e) {}
 
+      // Custom Email Templates storage & defaults
+      const STORAGE_KEY_CUSTOM_TEMPLATES = 'bf_custom_email_templates';
+      const DEFAULT_CUSTOM_TEMPLATES = [
+        {
+          id: 'custom_delay_apology',
+          name: 'Delayed Order Apology',
+          regarding: 'the delay of your order',
+          body: 'We sincerely apologize for the unexpected delay with your order today due to high operational demand. Our driver is on the way to your address and should arrive shortly. We truly appreciate your patience and understanding.',
+          wrapHeader: true,
+          wrapFooter: true
+        },
+        {
+          id: 'custom_missing_item',
+          name: 'Missing Item Wallet Refund',
+          regarding: 'the missing item from your order',
+          body: 'We deeply apologize that an item from your order was missing upon delivery. I have investigated this with our dispatch team, and the full value has been refunded back to your Breadfast wallet along with an apology voucher.',
+          wrapHeader: true,
+          wrapFooter: true
+        },
+        {
+          id: 'custom_out_of_stock',
+          name: 'Out of Stock Product Notification',
+          regarding: 'an out of stock product in your order',
+          body: 'While preparing your order, we noticed that one of your requested items is unfortunately out of stock. We sincerely apologize for this inconvenience. The item value has been immediately refunded to your Breadfast wallet, and the remainder of your order is on its way.',
+          wrapHeader: true,
+          wrapFooter: true
+        }
+      ];
+
+      const getSavedCustomTemplates = () => {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_TEMPLATES);
+          if (!raw) {
+            localStorage.setItem(STORAGE_KEY_CUSTOM_TEMPLATES, JSON.stringify(DEFAULT_CUSTOM_TEMPLATES));
+            return [...DEFAULT_CUSTOM_TEMPLATES];
+          }
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) { }
+        return [...DEFAULT_CUSTOM_TEMPLATES];
+      };
+
+      const saveCustomTemplatesToStorage = (templates) => {
+        try {
+          localStorage.setItem(STORAGE_KEY_CUSTOM_TEMPLATES, JSON.stringify(templates));
+        } catch (e) { }
+      };
+
+      let customTemplates = getSavedCustomTemplates();
+      let currentEmailMode = 'templates'; // 'templates' or 'custom'
+      let selectedCustomTemplateId = customTemplates[0]?.id || '__new__';
+
       // Calculate initial positioning & dimensions
       const initW = 620;
       const initH = Math.min(Math.round(window.innerHeight * 0.84), 690);
@@ -4542,6 +4642,15 @@ Have a good day.`
       body.className = 'bf-email-scrollbar';
       body.style.cssText = 'padding: 14px 16px; display: flex; flex-direction: column; gap: 11px; overflow-y: auto; flex: 1; min-height: 0;';
 
+      // Mode Switcher Tabs (Predefined Templates vs Custom Email)
+      const modeTabsRow = document.createElement('div');
+      modeTabsRow.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: #0f172a; padding: 4px; border-radius: 8px; border: 1px solid #334155; flex-shrink: 0;';
+      modeTabsRow.innerHTML = `
+        <button type="button" class="bf-email-mode-tab active" id="bf-email-tab-templates">📋 Predefined Templates</button>
+        <button type="button" class="bf-email-mode-tab" id="bf-email-tab-custom">✍️ Custom Email</button>
+      `;
+      body.appendChild(modeTabsRow);
+
       // 1. Controls Row: Customer Name, Order Number, Agent Name
       const row1 = document.createElement('div');
       row1.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; flex-shrink: 0;';
@@ -4603,15 +4712,45 @@ Have a good day.`
       extraFieldsContainer.style.cssText = 'display:none; flex-wrap:wrap; gap:8px; background:#0f172a; padding:10px 12px; border-radius:8px; border:1px solid #334155; flex-shrink: 0;';
       body.appendChild(extraFieldsContainer);
 
+      // 4.5 Custom Email Section (Displayed when Custom Email tab is active)
+      const customEmailContainer = document.createElement('div');
+      customEmailContainer.id = 'bf-email-custom-section';
+      customEmailContainer.style.cssText = 'display: none; flex-direction: column; gap: 8px; flex-shrink: 0;';
+      customEmailContainer.innerHTML = `
+        <div style="display:flex; gap:8px; align-items:flex-end;">
+          <div style="display:flex; flex-direction:column; gap:4px; flex:1;">
+            <label style="font-size:11px; font-weight:700; color:#cbd5e1;">Custom Template:</label>
+            <select id="bf-custom-tpl-select" class="bf-email-input" style="cursor:pointer; font-size:12px; font-weight:600; padding:6px 8px;">
+            </select>
+          </div>
+          <button type="button" id="bf-custom-tpl-save-btn" class="bf-email-secondary-btn" style="padding:7px 12px; font-size:11px; white-space:nowrap; background:#2563eb; color:#ffffff; border-color:#1d4ed8;" title="Save current custom email as a template">💾 Save</button>
+          <button type="button" id="bf-custom-tpl-delete-btn" class="bf-email-secondary-btn" style="padding:7px 10px; font-size:11px; white-space:nowrap; color:#f87171;" title="Delete this custom template">🗑️</button>
+        </div>
+
+
+
+        <div style="display:flex; gap:14px; align-items:center; background:#0f172a; padding:6px 10px; border-radius:6px; border:1px solid #334155;">
+          <label class="bf-custom-checkbox-label">
+            <input type="checkbox" id="bf-custom-wrap-header" checked />
+            <span>Official Greeting & Intro</span>
+          </label>
+          <label class="bf-custom-checkbox-label">
+            <input type="checkbox" id="bf-custom-wrap-footer" checked />
+            <span>Official Apology & Sign-off</span>
+          </label>
+        </div>
+      `;
+      body.appendChild(customEmailContainer);
+
       // 5. Live Preview Textarea (Flex-grow with window height)
       const previewGroup = document.createElement('div');
-      previewGroup.style.cssText = 'display:flex; flex-direction:column; gap:4px; flex:1; min-height:140px;';
+      previewGroup.style.cssText = 'display:flex; flex-direction:column; gap:4px; flex:1; min-height:200px;';
       previewGroup.innerHTML = `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
           <label style="font-size:11px; font-weight:700; color:#94a3b8;">LIVE EMAIL PREVIEW (EDITABLE):</label>
           <span style="font-size:10px; color:#64748b;">Direct edits are preserved</span>
         </div>
-        <textarea id="bf-email-preview" class="bf-email-scrollbar" style="width:100%; height:100%; min-height:120px; box-sizing:border-box; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:8px; color:#ffffff; font-size:13px; line-height:1.5; outline:none; resize:none; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transition:border-color 0.2s;"></textarea>
+        <textarea id="bf-email-preview" class="bf-email-scrollbar" style="width:100%; height:100%; min-height:180px; box-sizing:border-box; padding:10px 12px; background:#0f172a; border:1px solid #475569; border-radius:8px; color:#ffffff; font-size:13px; line-height:1.5; outline:none; resize:none; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; transition:border-color 0.2s;"></textarea>
       `;
       body.appendChild(previewGroup);
 
@@ -4664,6 +4803,40 @@ Have a good day.`
       const resetBtn = modal.querySelector('#bf-email-reset-btn');
       const copyBtn = modal.querySelector('#bf-email-copy-btn');
       const greetingChips = modal.querySelectorAll('.bf-email-chip');
+
+      const tabTemplatesBtn = modal.querySelector('#bf-email-tab-templates');
+      const tabCustomBtn = modal.querySelector('#bf-email-tab-custom');
+      const customSection = modal.querySelector('#bf-email-custom-section');
+      const customTplSelect = modal.querySelector('#bf-custom-tpl-select');
+      const customSaveBtn = modal.querySelector('#bf-custom-tpl-save-btn');
+      const customDeleteBtn = modal.querySelector('#bf-custom-tpl-delete-btn');
+
+      const customWrapHeaderInp = modal.querySelector('#bf-custom-wrap-header');
+      const customWrapFooterInp = modal.querySelector('#bf-custom-wrap-footer');
+
+      const renderCustomEmail = (p) => {
+        const wrapHeader = customWrapHeaderInp ? customWrapHeaderInp.checked : true;
+        const wrapFooter = customWrapFooterInp ? customWrapFooterInp.checked : true;
+
+        const parts = [];
+
+        if (wrapHeader) {
+          parts.push(`Good ${p.greeting} ${p.customerName},`);
+          parts.push('Hope you’re doing well.');
+          parts.push(`This is ${p.agentName} from Breadfast's team. I'm contacting you regarding order #${p.orderNumber}.`);
+        }
+
+        if (!wrapHeader && !wrapFooter) {
+          parts.push('(Edit your custom email in the preview below...)');
+        }
+
+        if (wrapFooter) {
+          parts.push('Once more, we sincerely apologize for any inconvenience caused, and we are right here to assist you at any time.');
+          parts.push('Regards,\nBreadfast Team.');
+        }
+
+        return parts.join('\n\n');
+      };
 
       // Populate Category Dropdown
       CATEGORIES.forEach(cat => {
@@ -4759,14 +4932,28 @@ Have a good day.`
         });
       };
 
-      const updateEmailPreview = () => {
-        const selectedId = tplSelect.value;
-        const tpl = EMAIL_TEMPLATES.find(t => t.id === selectedId) || EMAIL_TEMPLATES[0];
-        if (!tpl) {
-          previewText.value = '';
-          return;
-        }
+      let customRawTemplate = ''; // stores custom email with XX (customer) / XXX (order) placeholders
 
+      const resolveCustomPlaceholders = (tpl, p) => {
+        // Order matters: replace XXX first (longer) to avoid XX matching inside XXX
+        return tpl
+          .split('XXX').join(p.orderNumber)
+          .split('XX').join(p.customerName);
+      };
+
+      const unresolveCustomPlaceholders = (text, p) => {
+        // Reverse: replace actual values back to placeholders
+        let raw = text;
+        if (p.orderNumber && p.orderNumber !== 'XXX') {
+          raw = raw.split(p.orderNumber).join('XXX');
+        }
+        if (p.customerName && p.customerName !== 'XX') {
+          raw = raw.split(p.customerName).join('XX');
+        }
+        return raw;
+      };
+
+      const updateEmailPreview = () => {
         const rawCust = custNameInput.value.trim();
         const firstName = getFirstName(rawCust) || rawCust || 'XX';
 
@@ -4777,6 +4964,26 @@ Have a good day.`
           agentName: agentNameInput.value.trim() || 'YY',
           ...extraInputValues
         };
+
+        if (currentEmailMode === 'custom') {
+          if (!customRawTemplate) {
+            // Generate fresh template with placeholders
+            customRawTemplate = renderCustomEmail({
+              ...params,
+              customerName: 'XX',
+              orderNumber: 'XXX'
+            });
+          }
+          previewText.value = resolveCustomPlaceholders(customRawTemplate, params);
+          return;
+        }
+
+        const selectedId = tplSelect.value;
+        const tpl = EMAIL_TEMPLATES.find(t => t.id === selectedId) || EMAIL_TEMPLATES[0];
+        if (!tpl) {
+          previewText.value = '';
+          return;
+        }
 
         // Format: add blank lines between paragraphs for readability,
         // but keep consecutive numbered list items (e.g. "1-", "2-") single-spaced
@@ -4801,8 +5008,169 @@ Have a good day.`
         previewText.value = formatted;
       };
 
+      // Populate Custom Template Dropdown
+      const populateCustomTemplateDropdown = () => {
+        customTplSelect.innerHTML = '';
+
+        const newOpt = document.createElement('option');
+        newOpt.value = '__new__';
+        newOpt.textContent = '✨ New Blank Custom Email';
+        customTplSelect.appendChild(newOpt);
+
+        if (customTemplates.length > 0) {
+          const group = document.createElement('optgroup');
+          group.label = 'Saved Templates';
+          customTemplates.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = t.name;
+            group.appendChild(opt);
+          });
+          customTplSelect.appendChild(group);
+        }
+
+        customTplSelect.value = selectedCustomTemplateId;
+        if (customTplSelect.selectedIndex === -1) {
+          customTplSelect.selectedIndex = 0;
+          selectedCustomTemplateId = customTplSelect.value;
+        }
+
+        customDeleteBtn.style.display = selectedCustomTemplateId === '__new__' ? 'none' : 'inline-flex';
+      };
+
+      const loadCustomTemplate = (id) => {
+        selectedCustomTemplateId = id;
+        customDeleteBtn.style.display = id === '__new__' ? 'none' : 'inline-flex';
+
+        if (id === '__new__') {
+          customWrapHeaderInp.checked = true;
+          customWrapFooterInp.checked = true;
+          customRawTemplate = ''; // reset so fresh render happens
+        } else {
+          const found = customTemplates.find(t => t.id === id);
+          if (found) {
+            customWrapHeaderInp.checked = found.wrapHeader !== false;
+            customWrapFooterInp.checked = found.wrapFooter !== false;
+            // Load saved body (with placeholders) into raw template
+            if (found.body) {
+              customRawTemplate = found.body;
+            }
+          }
+        }
+        updateEmailPreview();
+      };
+
+      // Mode Tabs Event Listeners
+      tabTemplatesBtn.addEventListener('click', () => {
+        currentEmailMode = 'templates';
+        tabTemplatesBtn.classList.add('active');
+        tabCustomBtn.classList.remove('active');
+        tplRow.style.display = 'grid';
+        customSection.style.display = 'none';
+        renderExtraFields(EMAIL_TEMPLATES.find(t => t.id === tplSelect.value));
+        updateEmailPreview();
+      });
+
+      tabCustomBtn.addEventListener('click', () => {
+        currentEmailMode = 'custom';
+        tabCustomBtn.classList.add('active');
+        tabTemplatesBtn.classList.remove('active');
+        tplRow.style.display = 'none';
+        extraFieldsContainer.style.display = 'none';
+        customSection.style.display = 'flex';
+        if (!customRawTemplate) customRawTemplate = ''; // ensure fresh render
+        updateEmailPreview();
+      });
+
+      // Custom Email Controls Events
+      customTplSelect.addEventListener('change', () => {
+        loadCustomTemplate(customTplSelect.value);
+      });
+
+
+      customWrapHeaderInp.addEventListener('change', () => {
+        customRawTemplate = ''; // regenerate with new wrap setting
+        updateEmailPreview();
+      });
+      customWrapFooterInp.addEventListener('change', () => {
+        customRawTemplate = ''; // regenerate with new wrap setting
+        updateEmailPreview();
+      });
+
+      // Capture user edits in preview back to raw template with placeholders
+      previewText.addEventListener('input', () => {
+        if (currentEmailMode === 'custom') {
+          const rawCust = custNameInput.value.trim();
+          const firstName = getFirstName(rawCust) || rawCust || 'XX';
+          const curParams = {
+            orderNumber: orderNoInput.value.trim() || 'XXX',
+            customerName: firstName
+          };
+          customRawTemplate = unresolveCustomPlaceholders(previewText.value, curParams);
+        }
+      });
+
+      customSaveBtn.addEventListener('click', () => {
+        const previewContent = previewText.value.trim();
+        if (!previewContent) {
+          showToast('Please type a custom message before saving.', 'warning');
+          return;
+        }
+
+        let existingName = '';
+        if (selectedCustomTemplateId !== '__new__') {
+          const cur = customTemplates.find(t => t.id === selectedCustomTemplateId);
+          if (cur) existingName = cur.name;
+        }
+
+        const tplName = prompt('Enter a name for this custom template:', existingName || 'My Custom Email');
+        if (!tplName || !tplName.trim()) return;
+
+        const cleanName = tplName.trim();
+        const id = selectedCustomTemplateId !== '__new__' ? selectedCustomTemplateId : ('custom_' + Date.now());
+
+        const tplObj = {
+          id,
+          name: cleanName,
+          body: customRawTemplate || previewContent,
+          wrapHeader: customWrapHeaderInp.checked,
+          wrapFooter: customWrapFooterInp.checked
+        };
+
+        const existingIdx = customTemplates.findIndex(t => t.id === id);
+        if (existingIdx >= 0) {
+          customTemplates[existingIdx] = tplObj;
+        } else {
+          customTemplates.push(tplObj);
+        }
+
+        saveCustomTemplatesToStorage(customTemplates);
+        selectedCustomTemplateId = id;
+        populateCustomTemplateDropdown();
+        showToast(`Saved custom template "${cleanName}"!`, 'info');
+      });
+
+      customDeleteBtn.addEventListener('click', () => {
+        if (selectedCustomTemplateId === '__new__') return;
+        const cur = customTemplates.find(t => t.id === selectedCustomTemplateId);
+        if (!cur) return;
+
+        if (!confirm(`Delete custom template "${cur.name}"?`)) return;
+
+        customTemplates = customTemplates.filter(t => t.id !== selectedCustomTemplateId);
+        saveCustomTemplatesToStorage(customTemplates);
+        selectedCustomTemplateId = '__new__';
+        populateCustomTemplateDropdown();
+        loadCustomTemplate('__new__');
+        showToast('Custom template deleted.', 'info');
+      });
+
       // Category Change Event
       catSelect.addEventListener('change', () => {
+        if (catSelect.value === '✨ Custom Emails') {
+          tabCustomBtn.click();
+          return;
+        }
         populateTemplateDropdown(catSelect.value, searchInput.value);
         if (tplSelect.options.length > 0) {
           tplSelect.selectedIndex = 0;
@@ -5002,6 +5370,8 @@ Have a good day.`
       // Initial trigger
       populateTemplateDropdown('All Categories');
       tplSelect.dispatchEvent(new Event('change'));
+      populateCustomTemplateDropdown();
+      loadCustomTemplate(selectedCustomTemplateId);
     }
 
     rmsBtn.addEventListener('click', () => {
@@ -5109,7 +5479,6 @@ Have a good day.`
               { label: "Item / Order doesn't match picture / description" },
               { label: 'Missing label' },
               { label: 'Weight' },
-              { label: 'Warranty card not included' },
               { label: 'Fake product' }
             ]
           },
@@ -5511,51 +5880,94 @@ Have a good day.`
               }
             }
 
-            // Vertical positioning
-            const menuHeight = Math.min(childMenu.offsetHeight || 380, 380);
-            let topPos = rect.top - 4;
-            if (topPos + menuHeight > window.innerHeight - 10) {
-              topPos = Math.max(10, window.innerHeight - menuHeight - 10);
+            // Vertical positioning — ensure menu stays fully within viewport
+            const viewH = window.innerHeight;
+            const availableDown = viewH - rect.top - 10;
+            const availableUp = rect.bottom - 10;
+            // Dynamically cap maxHeight so menu never overflows viewport
+            const dynamicMax = Math.max(200, viewH - 20);
+            const effectiveMax = Math.min(380, dynamicMax);
+            childMenu.style.maxHeight = `${effectiveMax}px`;
+            const menuHeight = Math.min(childMenu.scrollHeight || effectiveMax, effectiveMax);
+
+            let topPos;
+            if (availableDown >= menuHeight) {
+              // Enough room below the item
+              topPos = rect.top - 4;
+            } else if (availableUp >= menuHeight) {
+              // Open upward from the bottom of the item
+              topPos = rect.bottom - menuHeight + 4;
+            } else {
+              // Not enough room either way — fit to bottom of viewport
+              topPos = Math.max(10, viewH - menuHeight - 10);
+            }
+            // Final clamp
+            if (topPos + menuHeight > viewH - 10) {
+              topPos = Math.max(10, viewH - menuHeight - 10);
             }
             if (topPos < 10) topPos = 10;
             childMenu.style.top = `${topPos}px`;
           };
 
-          // Hover ONLY highlights the item; it NEVER opens or closes menus automatically
+          let hoverTimer = null;
+          const openSubmenu = () => {
+            listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
+              if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
+                sib.style.backgroundColor = 'transparent';
+              }
+            });
+            itemEl.style.backgroundColor = '#2563eb';
+            positionAndShowChildMenu();
+          };
+
+          // Fast hover (50ms) auto-opens submenus for snappy navigation
           itemEl.addEventListener('mouseenter', () => {
             if (childMenu.style.display !== 'block') {
               itemEl.style.backgroundColor = '#334155';
+              hoverTimer = setTimeout(() => {
+                openSubmenu();
+              }, 50);
             }
           });
 
           itemEl.addEventListener('mouseleave', () => {
+            if (hoverTimer) {
+              clearTimeout(hoverTimer);
+              hoverTimer = null;
+            }
             if (childMenu.style.display !== 'block') {
               itemEl.style.backgroundColor = 'transparent';
             }
           });
 
-          // Click opens and locks the submenu open until another click occurs
+          // Click opens and locks the submenu open immediately
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (hoverTimer) {
+              clearTimeout(hoverTimer);
+              hoverTimer = null;
+            }
             if (childMenu.style.display === 'block') {
               closeSubmenusFromDepth(depth + 1);
               itemEl.style.backgroundColor = 'transparent';
             } else {
-              listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
-                if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
-                  sib.style.backgroundColor = 'transparent';
-                }
-              });
-              itemEl.style.backgroundColor = '#2563eb';
-              positionAndShowChildMenu();
+              openSubmenu();
             }
           });
         } else {
-          // Leaf item
+          // Leaf item - hovering closes deeper submenus smoothly
+          let leafHoverTimer = null;
           itemEl.addEventListener('mouseenter', () => {
             itemEl.style.backgroundColor = '#334155';
+            leafHoverTimer = setTimeout(() => {
+              closeSubmenusFromDepth(depth + 1);
+            }, 60);
           });
           itemEl.addEventListener('mouseleave', () => {
+            if (leafHoverTimer) {
+              clearTimeout(leafHoverTimer);
+              leafHoverTimer = null;
+            }
             itemEl.style.backgroundColor = 'transparent';
           });
 
@@ -6440,41 +6852,65 @@ Have a good day.`
             childMenu.style.top = `${Math.round(top)}px`;
           };
 
-          // Hover ONLY highlights the item; it NEVER opens or closes menus automatically
+          let hoverTimer = null;
+          const openSubmenu = () => {
+            listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
+              if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
+                sib.style.backgroundColor = 'transparent';
+              }
+            });
+            itemEl.style.backgroundColor = '#2563eb';
+            positionAndShowChildMenu();
+          };
+
+          // Fast hover (50ms) auto-opens submenus for snappy navigation
           itemEl.addEventListener('mouseenter', () => {
             if (childMenu.style.display !== 'block') {
               itemEl.style.backgroundColor = '#334155';
+              hoverTimer = setTimeout(() => {
+                openSubmenu();
+              }, 50);
             }
           });
 
           itemEl.addEventListener('mouseleave', () => {
+            if (hoverTimer) {
+              clearTimeout(hoverTimer);
+              hoverTimer = null;
+            }
             if (childMenu.style.display !== 'block') {
               itemEl.style.backgroundColor = 'transparent';
             }
           });
 
-          // Click opens and locks the submenu open until another click occurs
+          // Click opens and locks the submenu open immediately
           itemEl.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (hoverTimer) {
+              clearTimeout(hoverTimer);
+              hoverTimer = null;
+            }
             if (childMenu.style.display === 'block') {
               closeAutoFillSubmenusFromDepth(depth + 1);
               itemEl.style.backgroundColor = 'transparent';
             } else {
-              listContainer.querySelectorAll('.bf-tree-item').forEach(sib => {
-                if (sib !== itemEl && (!sib._childMenu || sib._childMenu.style.display === 'none')) {
-                  sib.style.backgroundColor = 'transparent';
-                }
-              });
-              itemEl.style.backgroundColor = '#2563eb';
-              positionAndShowChildMenu();
+              openSubmenu();
             }
           });
         } else {
-          // Leaf item
+          // Leaf item - hovering closes deeper submenus smoothly
+          let leafHoverTimer = null;
           itemEl.addEventListener('mouseenter', () => {
             itemEl.style.backgroundColor = '#334155';
+            leafHoverTimer = setTimeout(() => {
+              closeAutoFillSubmenusFromDepth(depth + 1);
+            }, 60);
           });
           itemEl.addEventListener('mouseleave', () => {
+            if (leafHoverTimer) {
+              clearTimeout(leafHoverTimer);
+              leafHoverTimer = null;
+            }
             itemEl.style.backgroundColor = 'transparent';
           });
 
@@ -7185,11 +7621,25 @@ Have a good day.`
               }
             }
 
-            // Vertical positioning
-            const menuHeight = Math.min(childMenu.offsetHeight || 220, 220);
-            let topPos = rect.top - 4;
-            if (topPos + menuHeight > window.innerHeight - 10) {
-              topPos = Math.max(10, window.innerHeight - menuHeight - 10);
+            // Vertical positioning — ensure menu stays fully within viewport
+            const viewH = window.innerHeight;
+            const availableDown = viewH - rect.top - 10;
+            const availableUp = rect.bottom - 10;
+            const dynamicMax = Math.max(150, viewH - 20);
+            const effectiveMax = Math.min(220, dynamicMax);
+            childMenu.style.maxHeight = `${effectiveMax}px`;
+            const menuHeight = Math.min(childMenu.scrollHeight || effectiveMax, effectiveMax);
+
+            let topPos;
+            if (availableDown >= menuHeight) {
+              topPos = rect.top - 4;
+            } else if (availableUp >= menuHeight) {
+              topPos = rect.bottom - menuHeight + 4;
+            } else {
+              topPos = Math.max(10, viewH - menuHeight - 10);
+            }
+            if (topPos + menuHeight > viewH - 10) {
+              topPos = Math.max(10, viewH - menuHeight - 10);
             }
             if (topPos < 10) topPos = 10;
             childMenu.style.top = `${topPos}px`;
@@ -7775,9 +8225,9 @@ Have a good day.`
           let delOk = true;
           const deliveryValToSet = bfDeliveryBy || 'Restaurant';
           if (deliveryValToSet) {
-            await new Promise(r => setTimeout(r, 120));
+            await new Promise(r => setTimeout(r, 20));
             for (let rTry = 0; rTry < 3; rTry++) {
-              if (rTry > 0) await new Promise(r => setTimeout(r, 200));
+              if (rTry > 0) await new Promise(r => setTimeout(r, 60));
               delOk = await assertDropdown('Delivery By', deliveryValToSet, 6000);
               if (delOk) break;
             }
@@ -7789,7 +8239,7 @@ Have a good day.`
           // Handle Tree Automation if params exist
           if (bfTreeChoice || bfDetail || bfCategory || bfSubDetail) {
             if (!treeAutomationDone) {
-              await new Promise(r => setTimeout(r, 200));
+              await new Promise(r => setTimeout(r, 30));
               const typeToApply = bfTreeType || 'Complaints';
               let catToApply = bfCategory || '';
               if (catToApply.includes('>')) {
@@ -7801,7 +8251,7 @@ Have a good day.`
               const ok = await applyTreeToForm(typeToApply, catToApply, detailToApply, subDetailToApply);
               if (ok) {
                 treeAutomationDone = true;
-                await new Promise(r => setTimeout(r, 300));
+                await new Promise(r => setTimeout(r, 30));
               } else {
                 treeOk = false;
               }
@@ -7822,7 +8272,7 @@ Have a good day.`
         const formIsRendered = findSubjectInput();
         if (!formIsRendered) return;
 
-        if (allDone || runAttempts > 30) {
+        if (allDone || runAttempts > 40) {
           if (masterIv) clearInterval(masterIv);
           return;
         }
@@ -7831,7 +8281,7 @@ Have a good day.`
         await syncState();
       };
 
-      const masterIv = setInterval(checkAndSync, 150);
+      const masterIv = setInterval(checkAndSync, 40);
       checkAndSync();
     };
 
