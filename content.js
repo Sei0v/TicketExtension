@@ -5754,8 +5754,17 @@
         } catch (e) {}
         try {
           if (typeof bfTicketStore !== 'undefined' && bfTicketStore.phone) {
-            const p = formatPhoneForKairos(bfTicketStore.phone);
-            if (p) return p;
+            // ONLY when the store belongs to the current ticket — otherwise this
+            // is the previous ticket's phone (wrong-chat risk).
+            let storeTidOk = false;
+            try {
+              const curTidP = getCurrentTicketId();
+              storeTidOk = !!(bfTicketStore.ticketId && curTidP && bfTicketStore.ticketId === curTidP);
+            } catch (e) {}
+            if (storeTidOk) {
+              const p = formatPhoneForKairos(bfTicketStore.phone);
+              if (p) return p;
+            }
           }
         } catch (e) {}
         try {
@@ -5774,6 +5783,11 @@
       };
 
       (async () => {
+        // Right after SPA navigation the DOM may still show the previous
+        // ticket — let it settle first (never search with a transitional phone).
+        if (justNavigated()) {
+          try { await new Promise(r => setTimeout(r, 1000)); } catch (e) {}
+        }
         let phone = findPagePhone();
         // The phone lives in the Contact tab — open it once and retry
         if (!phone && isKairos) {
@@ -8918,9 +8932,6 @@ Have a good day.`
     }
 
     let rootMenu = null;
-    // Test-Tree dry-run flag: when true, leaf picks only preview (toast + log)
-    // and never touch the form — safe playground for trying edits.
-    let bfTreeTestMode = false;
     const activeSubmenusByDepth = {};
 
     closeAllTreeMenus = () => {
@@ -9176,31 +9187,6 @@ Have a good day.`
             const category = currentPath[1] || '';
             const detail = currentPath.length > 2 ? currentPath[2] : '';
             const subDetail = currentPath.length > 3 ? currentPath[3] : '';
-            // TEST TREE dry-run: preview only, touches nothing.
-            // (Auto-click retired: Kairos contacts search 401s, so the real
-            // customer row never renders — only stale suggestions. Manual
-            // click stays the reliable path; the auto machinery below stays
-            // dormant for a future retry.)
-            if (bfTreeTestMode) {
-              bfTreeTestMode = false;
-              try {
-                const tFirst = subjectTypeFirst(treeType);
-                const tLast = subjectLastItem(category, detail, subDetail);
-                const subjPreview = [tFirst, tLast].filter(Boolean).join(' - ');
-                let l1info = '', l2info = '';
-                try {
-                  const l1field = (treeType || '').toLowerCase().includes('complain') ? 'Food Aggregation complaint' :
-                    ((treeType || '').toLowerCase().includes('internal') ? 'Internal request type' : 'Feedback type');
-                  const l1tr = findDropdownTrigger(l1field);
-                  if (l1tr) l1info = `L1→"${getKairosTriggerText(l1tr)}" [${fieldLabelOf(l1tr)}]`;
-                  const l2tr = findDropdownTrigger('Sub-category');
-                  if (l2tr) l2info = `L2→"${getKairosTriggerText(l2tr)}" [${fieldLabelOf(l2tr)}]`;
-                } catch (e2) {}
-                showToast(`[TEST] ${treeType} > ${currentPath.slice(1).join(' > ')}`, 'info');
-                console.log(`[BF TEST] dry-run pick: type="${treeType}" cat="${category}" det="${detail}" sub="${subDetail}" subject~"${subjPreview}" ${l1info} ${l2info}`);
-              } catch (e2) {}
-              return;
-            }
             // Remember last tree so Create Ticket can reuse it when pressed directly.
             // Live-first (like the Email button): the store may hold a previous ticket's
             // number while the sidepanel already shows the current one.
@@ -9241,16 +9227,14 @@ Have a good day.`
             } else {
               // Scroll to top so ticket fields (ID, order, UID) are visible before extraction
               await scrollToTicketTop();
-              const treeParams = {
+              openTicketPage(treeBtn, 'Tree', {
                 bf_tree_type: treeType,
                 bf_category: category,
                 bf_detail: detail,
                 bf_sub_detail: subDetail,
                 bf_order_number: savedOrderNo,
                 bf_tree_choice: subDetail || detail || category
-              };
-              if (isTestRun) treeParams.bf_auto_via = true;
-              openTicketPage(treeBtn, 'Tree', treeParams);
+              });
             }
           });
         }
@@ -9266,7 +9250,6 @@ Have a good day.`
 
     treeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      bfTreeTestMode = false;
       if (typeof closeSystemMenu === 'function') {
         closeSystemMenu();
       }
