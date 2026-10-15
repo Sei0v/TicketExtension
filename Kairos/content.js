@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.8] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v1.9] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2603,7 +2603,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '1.8';
+    const TOOL_VERSION = '1.9';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11480,7 +11480,7 @@ Have a good day.`
       if (!window.__bfUpdateCheckerOn) {
         window.__bfUpdateCheckerOn = true;
         setTimeout(() => { try { checkToolUpdate(true); } catch (e) {} }, 15000);
-        setInterval(() => { try { checkToolUpdate(true); } catch (e) {} }, 30 * 60 * 1000);
+        setInterval(() => { try { checkToolUpdate(true); } catch (e) {} }, 60 * 60 * 1000);
       }
     } catch (e) {}
   }
