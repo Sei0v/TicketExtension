@@ -3978,6 +3978,40 @@
       }
       return '';
     };
+    // Slow-network guard: confirm the rendered view belongs to the current
+    // ticket by finding a same-ticket conversation link in the DOM. Right
+    // after SPA navigation (or on a slow net) the old ticket lingers STABLY,
+    // so stability alone can't prove freshness — the view itself must reference
+    // the current conversation id.
+    const domShowsTicket = (tid) => {
+      if (!tid) return false;
+      try {
+        const links = document.querySelectorAll(`a[href*="conversations/${tid}"]`);
+        for (const a of links) {
+          if (a.closest('#bf-custom-ticket-buttons, #bf-settings-panel, #bf-email-modal, #bf-continue-tree-btn')) continue;
+          return true;
+        }
+      } catch (e) {}
+      return false;
+    };
+    // Settled ticket read: wait for the view to reference this ticket, then
+    // require a twice-stable value. Returns '' on uncertainty (caller retries
+    // or fails honestly — never a stale value).
+    const settledTicketRead = async (readFn, isValidFn, timeoutMs = 3000) => {
+      const tid = (() => { try { return getCurrentTicketId() || ''; } catch (e) { return ''; } })();
+      const t0 = Date.now();
+      while (Date.now() - t0 < timeoutMs) {
+        try { if (getCurrentTicketId() !== tid) return ''; } catch (e) { return ''; }
+        if (!tid || domShowsTicket(tid)) {
+          const v = await settledExtract(readFn, isValidFn, 1200);
+          if (v) return v;
+          // View is settled on this ticket but the value is absent → genuinely missing.
+          if (tid && domShowsTicket(tid)) return '';
+        }
+        await new Promise(r => setTimeout(r, 300));
+      }
+      return '';
+    };
     const triggerNavigationUpdate = () => {
       try { lastNavTs = Date.now(); } catch (e) {}
       setTimeout(() => {
@@ -4297,6 +4331,14 @@
           // Properties-tab Order block. Grab it here while tabs are clickable.
           let preModalOrderNo = '';
           try { preModalOrderNo = extractOrderNumber() || ''; } catch (e) {}
+          // Slow-net guard: right after navigation the capture above may be the
+          // previous ticket (stable but stale) — re-verify settled before use.
+          if (preModalOrderNo && justNavigated()) {
+            try {
+              const settledPre = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000);
+              preModalOrderNo = settledPre || '';
+            } catch (e) {}
+          }
           if (!preModalOrderNo) { try { preModalOrderNo = readCachedTicketOrder(); } catch (e) {} }
           if (!preModalOrderNo) {
             try {
@@ -4963,7 +5005,7 @@
               if (liveNo && orderNo && liveNo !== orderNo) {
                 console.log('[BF Kairos] Order conflict (stored vs live) — settling:', orderNo, 'vs', liveNo);
                 try {
-                  liveNo = await settledExtract(() => extractOrderNumber(), isValidOrderNumber, 1400) || '';
+                  liveNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000) || '';
                 } catch (e) { liveNo = ''; }
               }
               if (liveNo) {
@@ -5211,7 +5253,7 @@
               if (liveNo && orderNo && liveNo !== orderNo) {
                 console.log('[BF Kairos] Order conflict (stored vs live) — settling:', orderNo, 'vs', liveNo);
                 try {
-                  liveNo = await settledExtract(() => extractOrderNumber(), isValidOrderNumber, 1400) || '';
+                  liveNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000) || '';
                 } catch (e) { liveNo = ''; }
               }
               if (liveNo) {
@@ -7918,21 +7960,38 @@ Have a good day.`
       let customRawTemplate = ''; // stores custom email with XX (customer) / XXX (order) placeholders
 
       const resolveCustomPlaceholders = (tpl, p) => {
-        // Order matters: replace XXX first (longer) to avoid XX matching inside XXX
-        return tpl
-          .split('XXX').join(p.orderNumber)
-          .split('XX').join(p.customerName);
+        // Only REAL values replace placeholders (placeholder-looking values
+        // like 'XXX-XXXXXXX' must pass through untouched — otherwise XX inside
+        // XXX explodes into name-soup like "FarahX-FarahFarahFarahX").
+        // The full order slot 'XXX-XXXXXXX' is replaced as ONE unit first —
+        // splitting on bare 'XXX' would shred it into repeated numbers.
+        // Bare-XX replacement never touches XX runs inside longer X sequences.
+        let out = tpl;
+        try {
+          if (isValidOrderNumber(p.orderNumber)) {
+            out = out.split('XXX-XXXXXXX').join(p.orderNumber);
+            out = out.split('XXX').join(p.orderNumber);
+          }
+          const nm = (p.customerName || '').trim();
+          if (nm && nm !== 'XX' && nm !== 'XXX' && /[A-Za-z\u0600-\u06FF]/.test(nm)) {
+            out = out.replace(/(?<!X)XX(?!X)/g, nm);
+          }
+        } catch (e) {}
+        return out;
       };
 
       const unresolveCustomPlaceholders = (text, p) => {
-        // Reverse: replace actual values back to placeholders
+        // Reverse: replace actual values back to placeholders (real values only).
         let raw = text;
-        if (p.orderNumber && p.orderNumber !== 'XXX') {
-          raw = raw.split(p.orderNumber).join('XXX');
-        }
-        if (p.customerName && p.customerName !== 'XX') {
-          raw = raw.split(p.customerName).join('XX');
-        }
+        try {
+          if (isValidOrderNumber(p.orderNumber)) {
+            raw = raw.split(p.orderNumber).join('XXX');
+          }
+          const nm = (p.customerName || '').trim();
+          if (nm && nm !== 'XX' && nm !== 'XXX' && /[A-Za-z\u0600-\u06FF]/.test(nm)) {
+            raw = raw.split(nm).join('XX');
+          }
+        } catch (e) {}
         return raw;
       };
 
@@ -7957,6 +8016,13 @@ Have a good day.`
               orderNumber: 'XXX'
             });
           }
+          // Track greeting: custom templates bake "Good <daypart>" in at creation,
+          // so keep the leading greeting word synced (otherwise it goes stale).
+          try {
+            if (/\b(morning|afternoon|evening)\b/i.test(activeGreeting || '')) {
+              customRawTemplate = customRawTemplate.replace(/^(\s*Good\s+)(morning|afternoon|evening)\b/i, '$1' + activeGreeting);
+            }
+          } catch (e) {}
           previewText.value = resolveCustomPlaceholders(customRawTemplate, params);
           return;
         }
@@ -8853,7 +8919,6 @@ Have a good day.`
               { label: 'Bills Payment' },
               { label: 'Undefined/General' },
               { label: 'Boycott' },
-              { label: 'Unsealed bag' },
               { label: 'Other' }
             ]
           },
@@ -9196,7 +9261,7 @@ Have a good day.`
             // ticket: require a settled (twice-stable) read before trusting it.
             if (savedOrderNo && justNavigated()) {
               try {
-                const settledNo = await settledExtract(() => extractOrderNumber(), isValidOrderNumber, 1200);
+                const settledNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000);
                 if (settledNo) savedOrderNo = settledNo;
                 else { savedOrderNo = ''; console.log('[BF Kairos] Tree-pick order unsettled — refetching below.'); }
               } catch (e) {}
@@ -10172,7 +10237,7 @@ Have a good day.`
               // Settle right after SPA navigation (previous ticket may linger).
               if (afOrder && justNavigated()) {
                 try {
-                  const settledAf = await settledExtract(() => extractOrderNumber(), isValidOrderNumber, 1200);
+                  const settledAf = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000);
                   afOrder = settledAf || '';
                 } catch (e) {}
               }
