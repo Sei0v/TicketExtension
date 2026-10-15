@@ -2002,7 +2002,7 @@
           container.style.marginLeft = 'auto';
           container.style.marginRight = 'auto';
           Array.from(container.children).forEach(ch => {
-            if (ch === headerRow) {
+            if (ch === headerRow || (ch.id && ch.id === 'bf-version-row')) {
               ch.style.flex = '1 1 100%';
               ch.style.maxWidth = '100%';
             } else if (ch.classList && ch.classList.contains('bf-section-divider')) {
@@ -2666,9 +2666,8 @@
     versionPill.style.lineHeight = '1.2';
     versionPill.style.whiteSpace = 'nowrap';
     versionPill.style.flexShrink = '0';
-    versionPill.style.maxWidth = '150px';
-    versionPill.style.overflow = 'hidden';
-    versionPill.style.textOverflow = 'ellipsis';
+    versionPill.style.width = '100%';
+    versionPill.style.textAlign = 'center';
     paintVersionPill();
     versionPill.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2908,7 +2907,6 @@
     headerRow.appendChild(resetBtn);
     headerRow.appendChild(settingsBtn);
     headerRow.appendChild(lockBtn);
-    headerRow.appendChild(versionPill);
 
     const createBtn = (id, text, color) => {
       const btn = document.createElement('button');
@@ -11416,6 +11414,15 @@ Have a good day.`
 
     updateSystemMenuPosition(currentSide);
 
+    // Version pill lives in its own full-width row above the header, so the
+    // longer "Update ⬇ vX" text never squeezes or stretches the header layout.
+    const pillRow = document.createElement('div');
+    pillRow.id = 'bf-version-row';
+    pillRow.style.display = 'flex';
+    pillRow.style.width = '100%';
+    pillRow.style.flex = '0 0 auto';
+    pillRow.appendChild(versionPill);
+    container.appendChild(pillRow);
     container.appendChild(headerRow);
 
     const createSectionDivider = () => {
