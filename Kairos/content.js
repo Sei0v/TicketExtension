@@ -2552,7 +2552,7 @@
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
     const TOOL_VERSION = '1.3';
-    const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/version.json';
+    const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     let latestKnownVersion = '';
     const cmpVersions = (a, b) => {
       const pa = String(a || '').split('.').map(n => parseInt(n, 10) || 0);
@@ -2580,7 +2580,7 @@
       try {
         const r = await fetch(REPO_VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
         if (!r.ok) {
-          if (!silent) showToast('Could not reach update server.', 'error');
+          if (!silent) showToast('Update check failed (HTTP ' + r.status + ').', 'error');
           return;
         }
         const j = await r.json();
