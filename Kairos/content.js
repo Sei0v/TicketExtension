@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v1.3] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     if (!document.body) return;
@@ -2549,6 +2549,83 @@
       toggleSettingsPanel();
     });
 
+    // Version pill: shows current version, checks GitHub for updates.
+    // Blue "Update" pill + toast when a newer version.json is published.
+    const TOOL_VERSION = '1.3';
+    const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/version.json';
+    let latestKnownVersion = '';
+    const cmpVersions = (a, b) => {
+      const pa = String(a || '').split('.').map(n => parseInt(n, 10) || 0);
+      const pb = String(b || '').split('.').map(n => parseInt(n, 10) || 0);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const d = (pa[i] || 0) - (pb[i] || 0);
+        if (d !== 0) return d > 0 ? 1 : -1;
+      }
+      return 0;
+    };
+    const paintVersionPill = () => {
+      try {
+        if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
+          versionPill.textContent = `Update ⬇ v${latestKnownVersion}`;
+          versionPill.style.backgroundColor = '#2563eb';
+          versionPill.title = `New version v${latestKnownVersion} on GitHub — click for instructions`;
+        } else {
+          versionPill.textContent = `v${TOOL_VERSION}`;
+          versionPill.style.backgroundColor = '#4b5563';
+          versionPill.title = 'Check for updates';
+        }
+      } catch (e) {}
+    };
+    const checkToolUpdate = async (silent = true) => {
+      try {
+        const r = await fetch(REPO_VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) {
+          if (!silent) showToast('Could not reach update server.', 'error');
+          return;
+        }
+        const j = await r.json();
+        const remote = ((j && j.version) || '').trim();
+        if (!remote) {
+          if (!silent) showToast('Update info not found on GitHub yet.', 'error');
+          return;
+        }
+        if (cmpVersions(remote, TOOL_VERSION) > 0) {
+          latestKnownVersion = remote;
+          paintVersionPill();
+          showToast(`Update available: v${remote} on GitHub — git pull in E:\\Kairos, then reload extension + F5.`, 'info');
+        } else {
+          latestKnownVersion = '';
+          paintVersionPill();
+          if (!silent) showToast(`You're on the latest version (v${TOOL_VERSION}).`, 'success');
+        }
+      } catch (e) {
+        if (!silent) showToast('Update check failed (offline?).', 'error');
+      }
+    };
+    const versionPill = document.createElement('button');
+    versionPill.id = 'bf-version-pill';
+    versionPill.setAttribute('type', 'button');
+    versionPill.style.padding = '3px 7px';
+    versionPill.style.border = 'none';
+    versionPill.style.borderRadius = '4px';
+    versionPill.style.backgroundColor = '#4b5563';
+    versionPill.style.color = '#ffffff';
+    versionPill.style.fontSize = '11px';
+    versionPill.style.fontWeight = 'bold';
+    versionPill.style.cursor = 'pointer';
+    versionPill.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
+    versionPill.style.lineHeight = '1.2';
+    versionPill.style.whiteSpace = 'nowrap';
+    versionPill.style.flexShrink = '0';
+    paintVersionPill();
+    versionPill.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // كل دوسة = فحص fresh من GitHub، حتى لو كان عارف إن فيه update قبل كده.
+      showToast('Checking for updates...', 'info');
+      checkToolUpdate(false);
+    });
+
     // Lock button (small, header): toggles dragging the whole toolbar. 🔒 = locked.
     const lockBtn = document.createElement('button');
     lockBtn.id = 'bf-lock-tool-btn';
@@ -2772,6 +2849,7 @@
     headerRow.appendChild(resetBtn);
     headerRow.appendChild(settingsBtn);
     headerRow.appendChild(lockBtn);
+    headerRow.appendChild(versionPill);
 
     const createBtn = (id, text, color) => {
       const btn = document.createElement('button');
@@ -11321,6 +11399,15 @@ Have a good day.`
     // (No standalone applyCustomPos here — applyDockMode already positions,
     // and a stale drag pos must never override a docked bar.)
     try { enableToolbarDrag(); } catch (e) {}
+    // Update check: once shortly after load, then every 30 min (silent unless newer found).
+    // Guarded — ensureButtons can re-run after a tool reset.
+    try {
+      if (!window.__bfUpdateCheckerOn) {
+        window.__bfUpdateCheckerOn = true;
+        setTimeout(() => { try { checkToolUpdate(true); } catch (e) {} }, 15000);
+        setInterval(() => { try { checkToolUpdate(true); } catch (e) {} }, 30 * 60 * 1000);
+      }
+    } catch (e) {}
   }
 
   // =========================================================================

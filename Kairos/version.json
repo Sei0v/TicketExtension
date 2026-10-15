@@ -1,0 +1,1 @@
+{"notes": "Merge settledTicketRead slow-net guard + hardened custom placeholders + greeting sync into canonical root (keeps v1.2 pill). Remove Unsealed bag entry.", "updated": "2026-10-15", "version": "1.3"}
