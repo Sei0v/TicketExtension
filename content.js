@@ -2621,12 +2621,9 @@
     versionPill.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
-        showToast(`Update v${latestKnownVersion} on GitHub — git pull in E:\\Kairos, reload extension + F5.`, 'info');
-      } else {
-        showToast('Checking for updates...', 'info');
-        checkToolUpdate(false);
-      }
+      // كل دوسة = فحص fresh من GitHub، حتى لو كان عارف إن فيه update قبل كده.
+      showToast('Checking for updates...', 'info');
+      checkToolUpdate(false);
     });
 
     // Lock button (small, header): toggles dragging the whole toolbar. 🔒 = locked.
