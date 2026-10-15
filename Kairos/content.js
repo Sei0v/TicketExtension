@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.9] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v2.0] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2428,8 +2428,20 @@
       panel.id = 'bf-settings-panel';
       panel.style.cssText = 'position:fixed!important;bottom:120px!important;right:28px!important;z-index:2147483647!important;background:#111827!important;color:#fff!important;border:1px solid #374151!important;border-radius:10px!important;padding:14px!important;width:250px!important;box-shadow:0 6px 20px rgba(0,0,0,.5)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;';
       const title = document.createElement('div');
-      title.textContent = 'Tool Settings';
-      title.style.cssText = 'font-weight:bold!important;font-size:13px!important;margin-bottom:10px!important;cursor:move!important;user-select:none!important;';
+      title.style.cssText = 'display:flex!important;align-items:center!important;justify-content:space-between!important;font-weight:bold!important;font-size:13px!important;margin-bottom:10px!important;cursor:move!important;user-select:none!important;';
+      const titleTxt = document.createElement('span');
+      titleTxt.textContent = 'Tool Settings';
+      title.appendChild(titleTxt);
+      const closeX = document.createElement('button');
+      closeX.setAttribute('type', 'button');
+      closeX.textContent = '✕';
+      closeX.title = 'Close settings';
+      closeX.style.cssText = 'background:transparent!important;border:none!important;color:#9ca3af!important;font-size:14px!important;font-weight:bold!important;cursor:pointer!important;padding:0 2px!important;line-height:1!important;';
+      closeX.addEventListener('mouseenter', () => { try { closeX.style.setProperty('color', '#fff', 'important'); } catch (err) {} });
+      closeX.addEventListener('mouseleave', () => { try { closeX.style.setProperty('color', '#9ca3af', 'important'); } catch (err) {} });
+      closeX.addEventListener('mousedown', (e) => { e.stopPropagation(); });
+      closeX.addEventListener('click', (e) => { e.stopPropagation(); panel.style.display = 'none'; });
+      title.appendChild(closeX);
       // Draggable settings panel (drag by the title bar).
       title.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
@@ -2603,7 +2615,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '1.9';
+    const TOOL_VERSION = '2.0';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
