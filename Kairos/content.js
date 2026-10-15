@@ -2592,7 +2592,7 @@
         if (cmpVersions(remote, TOOL_VERSION) > 0) {
           latestKnownVersion = remote;
           paintVersionPill();
-          showToast(`Update available: v${remote} on GitHub — git pull in E:\\Kairos, then reload extension + F5.`, 'info');
+          showToast(`Update v${remote} on GitHub — git pull, or re-download ZIP. Then reload extension + F5.`, 'info');
         } else {
           latestKnownVersion = '';
           paintVersionPill();

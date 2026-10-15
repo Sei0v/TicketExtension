@@ -1,1 +1,1 @@
-{"notes": "DEMO 1.4 for update-pill test. Press the version pill on v1.3 and it should offer Update to v1.4.", "updated": "2026-10-15", "version": "1.4"}
+{"notes": "v1.4: fixed update check URL (Kairos/version.json), pill click always re-checks, clearer update toast + README update guide.", "updated": "2026-10-15", "version": "1.4"}

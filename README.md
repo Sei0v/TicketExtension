@@ -11,5 +11,10 @@
 3. Click on **Load unpacked**.
 4. Select the extracted folder, and you are ready to go!
 
+## How to Update
+When the toolbar version pill turns blue (Update ⬇), pick one method:
+- **With git:** `git pull` in `E:\Kairos`, then reload the extension + F5.
+- **Without git:** press **Code → Download ZIP**, extract over the old folder (replace files), then reload the extension + F5.
+
 ## Video
 https://github.com/user-attachments/assets/c22a5811-fb97-4d27-bcf3-93bfe7359742
