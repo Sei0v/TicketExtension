@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.5] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v1.6] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     if (!document.body) return;
@@ -2599,7 +2599,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '1.5';
+    const TOOL_VERSION = '1.6';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
