@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v1.5] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     if (!document.body) return;
@@ -2044,6 +2044,38 @@
         }
       } catch (e) {}
     };
+    // Dock-aware root menu placement (shared by Tree/AutoFill/Sheets/System).
+    // Floating + side bars: sideways flyout, bottom-aligned to the button.
+    // Top bar: menu opens BELOW the bar; bottom bar: opens ABOVE it.
+    // Always capped to the viewport so options never render off-screen.
+    const positionRootMenuForDock = (menuEl) => {
+      if (!menuEl) return;
+      try {
+        menuEl.style.top = '';
+        menuEl.style.bottom = '';
+        menuEl.style.maxHeight = '';
+        menuEl.style.overflowY = '';
+        if (currentDock === 'top' || currentDock === 'bottom') {
+          menuEl.style.left = '0';
+          menuEl.style.right = 'auto';
+          menuEl.style.overflowY = 'auto';
+          menuEl.style.maxHeight = Math.max(200, window.innerHeight - 140) + 'px';
+          if (currentDock === 'top') {
+            menuEl.style.top = 'calc(100% + 8px)';
+          } else {
+            menuEl.style.bottom = 'calc(100% + 8px)';
+          }
+        } else if (currentSide === 'right') {
+          menuEl.style.right = 'calc(100% + 8px)';
+          menuEl.style.left = 'auto';
+          menuEl.style.bottom = '0';
+        } else {
+          menuEl.style.left = 'calc(100% + 8px)';
+          menuEl.style.right = 'auto';
+          menuEl.style.bottom = '0';
+        }
+      } catch (e) {}
+    };
     // === Toolbar color schemes (recolor the three button groups) ===
     const COLOR_THEMES = {
       ocean: { label: 'Ocean (default)', blue: '#2563eb', teal: '#0d9488', violet: '#7c3aed' },
@@ -2095,6 +2127,15 @@
         container.style.transform = '';
         if (mode === 'floating') {
           // Restore corner/drag positioning + button flow.
+          // Clear any stale edges left by a previous docked mode (e.g. top:0
+          // from the top bar + bottom:20px would stretch the toolbar full-height).
+          container.style.top = '';
+          container.style.bottom = '';
+          container.style.left = '';
+          container.style.right = '';
+          container.style.flexDirection = 'column';
+          container.style.flexWrap = 'nowrap';
+          container.style.alignItems = 'stretch';
           container.style.backgroundColor = '';
           container.style.border = '';
           container.style.borderRadius = '';
@@ -2195,6 +2236,11 @@
           });
         }
         if (!skipCollapse) { try { applyCollapsed(isCollapsed); } catch (e) {} }
+        // Re-seat menus for the new dock (top/bottom bars open below/above).
+        try { if (typeof updateTreeMenuPosition === 'function') updateTreeMenuPosition(currentSide); } catch (e) {}
+        try { if (typeof updateAutoFillMenuPosition === 'function') updateAutoFillMenuPosition(currentSide); } catch (e) {}
+        try { if (typeof updateSheetsMenuPosition === 'function') updateSheetsMenuPosition(currentSide); } catch (e) {}
+        try { if (typeof updateSystemMenuPosition === 'function') updateSystemMenuPosition(currentSide); } catch (e) {}
       } catch (e) {}
     };
     // === Toolbar size % (100 = normal). Scales font + padding explicitly
@@ -2303,6 +2349,8 @@
     headerRow.style.gap = '4px';
     headerRow.style.alignItems = 'center';
     headerRow.style.justifyContent = 'space-between';
+    headerRow.style.flexWrap = 'nowrap';
+    headerRow.style.overflow = 'hidden';
 
     // Reset button (unstick tool, menus, automations)
     const resetBtn = document.createElement('button');
@@ -2551,8 +2599,9 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '1.4';
+    const TOOL_VERSION = '1.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
+    const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
     const cmpVersions = (a, b) => {
       const pa = String(a || '').split('.').map(n => parseInt(n, 10) || 0);
@@ -2568,7 +2617,7 @@
         if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
           versionPill.textContent = `Update ⬇ v${latestKnownVersion}`;
           versionPill.style.backgroundColor = '#2563eb';
-          versionPill.title = `New version v${latestKnownVersion} on GitHub — click for instructions`;
+          versionPill.title = `New version v${latestKnownVersion} on GitHub — click to download`;
         } else {
           versionPill.textContent = `v${TOOL_VERSION}`;
           versionPill.style.backgroundColor = '#4b5563';
@@ -2592,7 +2641,7 @@
         if (cmpVersions(remote, TOOL_VERSION) > 0) {
           latestKnownVersion = remote;
           paintVersionPill();
-          showToast(`Update v${remote} on GitHub — git pull, or re-download ZIP. Then reload extension + F5.`, 'info');
+          showToast(`Update v${remote} found — click the version pill again to download it.`, 'info');
         } else {
           latestKnownVersion = '';
           paintVersionPill();
@@ -2617,13 +2666,23 @@
     versionPill.style.lineHeight = '1.2';
     versionPill.style.whiteSpace = 'nowrap';
     versionPill.style.flexShrink = '0';
+    versionPill.style.maxWidth = '150px';
+    versionPill.style.overflow = 'hidden';
+    versionPill.style.textOverflow = 'ellipsis';
     paintVersionPill();
     versionPill.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      // كل دوسة = فحص fresh من GitHub، حتى لو كان عارف إن فيه update قبل كده.
-      showToast('Checking for updates...', 'info');
-      checkToolUpdate(false);
+      // Update already known → open the ZIP download at once (still a user
+      // gesture, so no popup blocker). Otherwise run a fresh check first.
+      if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
+        try { window.open(DOWNLOAD_ZIP_URL, '_blank', 'noopener,noreferrer'); } catch (err) {}
+        showToast(`Downloading v${latestKnownVersion} — extract over E:\\Kairos\\Kairos, then reload extension + F5.`, 'info');
+        checkToolUpdate(true);
+      } else {
+        showToast('Checking for updates...', 'info');
+        checkToolUpdate(false);
+      }
     });
 
     // Lock button (small, header): toggles dragging the whole toolbar. 🔒 = locked.
@@ -9430,6 +9489,7 @@ Have a good day.`
       arrows.forEach(ar => {
         ar.textContent = side === 'right' ? '◂' : '▸';
       });
+      positionRootMenuForDock(rootMenu);
       closeAllTreeMenus();
     };
 
@@ -10383,6 +10443,7 @@ Have a good day.`
       arrows.forEach(ar => {
         ar.textContent = side === 'right' ? '◂' : '▸';
       });
+      positionRootMenuForDock(autoFillRootMenu);
       closeAllAutoFillMenus();
     };
 
@@ -11210,6 +11271,7 @@ Have a good day.`
       arrows.forEach(ar => {
         ar.textContent = side === 'right' ? '◂' : '▸';
       });
+      positionRootMenuForDock(rootSheetsMenu);
       closeAllSheetsMenus();
     };
 
@@ -11348,6 +11410,7 @@ Have a good day.`
         systemMenu.style.left = 'calc(100% + 8px)';
         systemMenu.style.right = 'auto';
       }
+      positionRootMenuForDock(systemMenu);
       closeSystemMenu();
     };
 

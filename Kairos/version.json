@@ -1,1 +1,1 @@
-{"notes": "v1.4: fixed update check URL (Kairos/version.json), pill click always re-checks, clearer update toast + README update guide.", "updated": "2026-10-15", "version": "1.4"}
+{"notes": "v1.5: pill click downloads ZIP when update known; fix tall toolbar after dock switch (stale edges cleared); top/bottom dock menus open inside viewport; header no-wrap.", "updated": "2026-10-16", "version": "1.5"}
