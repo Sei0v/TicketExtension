@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v1.7] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v1.8] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2603,7 +2603,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '1.7';
+    const TOOL_VERSION = '1.8';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -2620,11 +2620,11 @@
       try {
         if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
           versionPill.textContent = `Update ⬇ v${latestKnownVersion}`;
-          versionPill.style.backgroundColor = '#2563eb';
+          versionPill.style.backgroundColor = '#0f766e';
           versionPill.title = `New version v${latestKnownVersion} on GitHub — click to download`;
         } else {
           versionPill.textContent = `v${TOOL_VERSION}`;
-          versionPill.style.backgroundColor = '#4b5563';
+          versionPill.style.backgroundColor = '#6b7280';
           versionPill.title = 'Check for updates';
         }
       } catch (e) {}
@@ -2658,19 +2658,19 @@
     const versionPill = document.createElement('button');
     versionPill.id = 'bf-version-pill';
     versionPill.setAttribute('type', 'button');
-    versionPill.style.padding = '3px 7px';
+    versionPill.style.padding = '2px 10px';
     versionPill.style.border = 'none';
-    versionPill.style.borderRadius = '4px';
-    versionPill.style.backgroundColor = '#4b5563';
+    versionPill.style.borderRadius = '10px';
+    versionPill.style.backgroundColor = '#6b7280';
     versionPill.style.color = '#ffffff';
-    versionPill.style.fontSize = '11px';
+    versionPill.style.fontSize = '10px';
     versionPill.style.fontWeight = 'bold';
     versionPill.style.cursor = 'pointer';
     versionPill.style.boxShadow = '0 1px 3px rgba(0,0,0,0.2)';
     versionPill.style.lineHeight = '1.2';
     versionPill.style.whiteSpace = 'nowrap';
     versionPill.style.flexShrink = '0';
-    versionPill.style.width = '100%';
+    versionPill.style.width = 'auto';
     versionPill.style.textAlign = 'center';
     paintVersionPill();
     versionPill.addEventListener('click', (e) => {
@@ -11418,13 +11418,14 @@ Have a good day.`
 
     updateSystemMenuPosition(currentSide);
 
-    // Version pill lives in its own full-width row above the header, so the
-    // longer "Update ⬇ vX" text never squeezes or stretches the header layout.
+    // Version pill lives in its own row above the header as a small centered
+    // chip, so it never squeezes or stretches the header layout.
     const pillRow = document.createElement('div');
     pillRow.id = 'bf-version-row';
     pillRow.style.display = 'flex';
     pillRow.style.width = '100%';
     pillRow.style.flex = '0 0 auto';
+    pillRow.style.justifyContent = 'center';
     pillRow.appendChild(versionPill);
     container.appendChild(pillRow);
     container.appendChild(headerRow);
