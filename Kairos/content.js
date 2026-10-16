@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v2.0] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v2.1] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2615,7 +2615,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '2.0';
+    const TOOL_VERSION = '2.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11916,8 +11916,20 @@ Have a good day.`
   // Breadfast Food RMS Automation: Auto-open Order Details from List
   // =========================================================================
   if (isFoodRms) {
-    // If already on order details page (/orders/details/...), do nothing!
+    // Order details page (/orders/details/...): mount the ticket-handoff button.
+    // Svelte renders async — poll until order # + phone are readable, then mount.
     if (window.location.pathname.includes('/orders/details/')) {
+      let rmsBtnTries = 0;
+      const rmsBtnIv = setInterval(() => {
+        rmsBtnTries++;
+        try {
+          const d = extractRmsOrderDetails();
+          if ((d.orderNumber && d.phone) || rmsBtnTries > 40) {
+            clearInterval(rmsBtnIv);
+            if (d.orderNumber && d.phone) injectRmsTicketButton();
+          }
+        } catch (e) { if (rmsBtnTries > 40) clearInterval(rmsBtnIv); }
+      }, 500);
       return;
     }
 
@@ -12044,5 +12056,117 @@ Have a good day.`
         tryFindAndOpenDetails();
       }
     }
+  }
+
+  // =========================================================================
+  // RMS order-details → Kairos ticket handoff.
+  // Button on /orders/details/* grabs the order # (e.g. #1610-153814087) +
+  // customer phone (Customer Info card) and opens Kairos customer search in a
+  // new tab carrying bf_order_number + bf_phone.
+  // =========================================================================
+  const extractRmsOrderDetails = () => {
+    let orderNumber = '';
+    let phone = '';
+    try {
+      const bodyText = (document.body && document.body.innerText) || '';
+      const om = bodyText.match(/#(\d{4}-\d{5,14})/);
+      if (om) orderNumber = om[1];
+      const spans = Array.from(document.querySelectorAll('span'));
+      for (const s of spans) {
+        if ((s.textContent || '').trim() !== 'Phone Number') continue;
+        const scope = (s.closest('div') && s.closest('div').parentElement) || s.parentElement;
+        const pm = ((scope && scope.innerText) || '').match(/(\+?201[0125]\d{8})/);
+        if (pm) { phone = pm[1]; break; }
+      }
+      if (!phone) {
+        const pm2 = bodyText.match(/(\+?201[0125]\d{8})/);
+        if (pm2) phone = pm2[1];
+      }
+    } catch (e) {}
+    return { orderNumber, phone: (phone || '').replace(/\D/g, '') };
+  };
+
+  function fallbackCopy(txt, done) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.cssText = 'position:fixed!important;opacity:0!important;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      if (done) done();
+    } catch (e) {}
+  }
+
+  const injectRmsTicketButton = () => {
+    if (document.getElementById('bf-rms-ticket-btn')) return;
+    if (!document.body) return;
+    const btn = document.createElement('button');
+    btn.id = 'bf-rms-ticket-btn';
+    btn.setAttribute('type', 'button');
+    btn.textContent = '🎫 Ticket';
+    btn.title = 'Open customer in Kairos with this order + phone';
+    btn.style.cssText = 'position:fixed!important;left:20px!important;bottom:20px!important;z-index:2147483645!important;background:#0d9488!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:10px 16px!important;font-size:13px!important;font-weight:bold!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;';
+    btn.addEventListener('click', () => {
+      const d = extractRmsOrderDetails();
+      const orderOk = d.orderNumber && (typeof isValidOrderNumber === 'function' ? isValidOrderNumber(d.orderNumber) : /^\d{4}-\d{5,14}$/.test(d.orderNumber));
+      if (!orderOk) {
+        showToast('Could not find the order number on this RMS page yet — wait for it to load and retry.', 'error');
+        return;
+      }
+      if (!d.phone || d.phone.length < 11) {
+        showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
+        return;
+      }
+      const url = 'https://kairos.breadfast.com/app/accounts/1/search?q=' + encodeURIComponent(d.phone) + '&bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
+      try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
+      btn.textContent = '✓ Opened';
+      setTimeout(() => { try { btn.textContent = '🎫 Ticket'; } catch (e) {} }, 2000);
+    });
+    document.body.appendChild(btn);
+  };
+
+  // Kairos-side receiver: floating handoff card when opened from RMS.
+  if (isKairos) {
+    try {
+      const kUsp = new URLSearchParams(window.location.search);
+      const kOrder = (kUsp.get('bf_order_number') || '').trim();
+      const kPhone = (kUsp.get('bf_phone') || '').replace(/\D/g, '');
+      if (kOrder && kPhone && !document.getElementById('bf-rms-handoff-card')) {
+        const card = document.createElement('div');
+        card.id = 'bf-rms-handoff-card';
+        card.style.cssText = 'position:fixed!important;top:14px!important;left:50%!important;transform:translateX(-50%)!important;z-index:2147483646!important;background:#111827!important;color:#fff!important;border:1px solid #0d9488!important;border-radius:10px!important;padding:10px 12px!important;display:flex!important;gap:10px!important;align-items:center!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;font-size:12px!important;box-shadow:0 6px 20px rgba(0,0,0,.5)!important;';
+        const label = document.createElement('span');
+        label.textContent = 'Order ' + kOrder + ' • ' + kPhone;
+        label.style.cssText = 'font-weight:bold!important;white-space:nowrap!important;';
+        const copyBtn = document.createElement('button');
+        copyBtn.setAttribute('type', 'button');
+        copyBtn.textContent = 'Copy';
+        copyBtn.title = 'Copy order + phone';
+        copyBtn.style.cssText = 'background:#0d9488!important;color:#fff!important;border:none!important;border-radius:6px!important;padding:5px 10px!important;font-size:11px!important;font-weight:bold!important;cursor:pointer!important;white-space:nowrap!important;';
+        copyBtn.addEventListener('click', () => {
+          const txt = kOrder + ' ' + kPhone;
+          const done = () => { copyBtn.textContent = '✓ Copied'; setTimeout(() => { try { copyBtn.textContent = 'Copy'; } catch (e) {} }, 1500); };
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+              navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));
+            } else fallbackCopy(txt, done);
+          } catch (e) { fallbackCopy(txt, done); }
+        });
+        const xBtn = document.createElement('button');
+        xBtn.setAttribute('type', 'button');
+        xBtn.textContent = '✕';
+        xBtn.title = 'Dismiss';
+        xBtn.style.cssText = 'background:transparent!important;border:none!important;color:#9ca3af!important;font-size:13px!important;font-weight:bold!important;cursor:pointer!important;padding:0 2px!important;';
+        xBtn.addEventListener('click', () => { try { card.remove(); } catch (e) {} });
+        card.appendChild(label);
+        card.appendChild(copyBtn);
+        card.appendChild(xBtn);
+        const mountCard = () => { if (document.body && !document.getElementById('bf-rms-handoff-card')) document.body.appendChild(card); };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountCard);
+        else mountCard();
+      }
+    } catch (e) {}
   }
 })();
