@@ -1,1 +1,1 @@
-{"notes": "v3.9: customer-chip detection works on conversations modal (To-field fallback), so manual picks auto-resume.", "updated": "2026-10-16", "version": "3.9"}
+{"notes": "v4.0: RMS handoff card auto-dismisses once the ticket flow progresses.", "updated": "2026-10-16", "version": "4.0"}

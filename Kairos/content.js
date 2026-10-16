@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.9] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.0] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.9';
+    const TOOL_VERSION = '4.0';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -5305,6 +5305,7 @@
                 }
                 if ((okInput.value || '') === orderNo) {
                   console.log('[BF Kairos] Modal Order number set:', orderNo);
+                  try { window.__bfHandoffDone = true; } catch (e) {}
                   showToast(`Modal Order number set: ${orderNo}`, 'info');
                   return true;
                 }
@@ -12230,6 +12231,16 @@ Have a good day.`
         const mountCard = () => { if (document.body && !document.getElementById('bf-rms-handoff-card')) document.body.appendChild(card); };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountCard);
         else mountCard();
+        // Auto-dismiss once the ticket flow makes progress (order typed).
+        const handoffIv = setInterval(() => {
+          try {
+            if (window.__bfHandoffDone) {
+              clearInterval(handoffIv);
+              const c = document.getElementById('bf-rms-handoff-card');
+              if (c) c.remove();
+            }
+          } catch (e) {}
+        }, 1000);
       }
     } catch (e) {}
   }
