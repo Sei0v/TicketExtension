@@ -1,1 +1,1 @@
-{"notes": "v4.4: removed duplicate RMS Ticket button (Normal Ticket does the handoff).", "updated": "2026-10-16", "version": "4.4"}
+{"notes": "v4.5: RMS Tree handoff skips the slow ticket-DOM order scan when order is known (opens instantly).", "updated": "2026-10-16", "version": "4.5"}

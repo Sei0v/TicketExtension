@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.5] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.4';
+    const TOOL_VERSION = '4.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -5647,8 +5647,10 @@
       let kairosParams = [];
       try {
         const rd = (typeof extractRmsOrderDetails === 'function') ? extractRmsOrderDetails() : { orderNumber: '', phone: '' };
+        // Skip the ticket-DOM scan when the order is already known (it walks
+        // the whole page and is the slowest part of the RMS handoff).
         let liveOrder = '';
-        try { liveOrder = (typeof extractOrderNumber === 'function' && extractOrderNumber()) || ''; } catch (e) {}
+        try { liveOrder = (!extraParams.bf_order_number && !rd.orderNumber && typeof extractOrderNumber === 'function' && extractOrderNumber()) || ''; } catch (e) {}
         const ord = extraParams.bf_order_number || rd.orderNumber || liveOrder || '';
         if (ord) kairosParams.push('bf_order_number=' + encodeURIComponent(ord));
         const ph = ((rd.phone || '') + '').replace(/\D/g, '');
