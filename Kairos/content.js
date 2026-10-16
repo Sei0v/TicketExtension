@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.1] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.2] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.1';
+    const TOOL_VERSION = '4.2';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4617,14 +4617,16 @@
 
             showToast(`CST Phone entered: ${phone}`, 'info');
 
-            // Helper to check if Customer is committed as a chip in To field
-            // Committed state: phone appears as TEXT (input gone) with a remove (x) button.
-            // Strict phone-digits match only — loose matches caused false positives.
+            // Helper to check if Customer is committed as a chip in To field.
+            // Committed chips show phone digits AND/OR the contact email
+            // (conversations modal chips show name + email, no phone).
             const isCustomerSelected = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
               if (cleanP.length < 8) return false;
               const hasDigits = (el) => (el.textContent || '').replace(/[^0-9]/g, '').includes(cleanP);
+              const hasEmail = (el) => { const t = (el.textContent || ''); return t.includes('@') && t.includes('.'); };
               const hasX = (el) => !!(el.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]'));
+              const hasOptions = (el) => !!(el.querySelector('[role="option"], [role="listbox"]'));
               // 1) Precise: contact field via compose testids (ticket page).
               try {
                 const form = composeForm();
@@ -4633,6 +4635,12 @@
                 if (contactField) {
                   const hasInput = !!contactField.querySelector('input');
                   if (hasDigits(contactField)) {
+                    if (!hasInput) return true;
+                    if (hasX(contactField)) return true;
+                  }
+                  // Email chip (no phone digits) — only when no results list is
+                  // open inside the field (its rows also carry emails).
+                  if (!hasOptions(contactField) && hasEmail(contactField)) {
                     if (!hasInput) return true;
                     if (hasX(contactField)) return true;
                   }
@@ -4646,7 +4654,9 @@
                   let p = liveInput.parentElement;
                   for (let d = 0; d < 4 && p && p !== document.body; d++) {
                     if (p.querySelector('[role="option"], [role="listbox"]')) { p = p.parentElement; continue; }
-                    if (hasDigits(p)) {
+                    const dMatch = hasDigits(p);
+                    const eMatch = hasEmail(p);
+                    if (dMatch || eMatch) {
                       if (!p.querySelector('input')) return true;
                       if (hasX(p)) return true;
                     }
@@ -4654,15 +4664,19 @@
                   }
                 }
               } catch (e) {}
-              // 3) Chip pattern anywhere: smallest container holding the phone plus
-              // a remove control (toolbar, results lists and huge containers excluded
-              // so modal chrome can never fake a match).
+              // 3) Chip pattern anywhere: small container holding the phone or an
+              // email plus a remove control — and never while typing (an input
+              // inside means nothing committed yet). Toolbar, results lists and
+              // huge containers excluded so modal chrome can't fake a match.
               try {
                 const cands = Array.from(document.querySelectorAll('span, div')).filter(el => {
                   if (el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn')) return false;
                   if (el.closest('[role="option"], [role="listbox"]')) return false;
                   if (el.children.length > 4) return false;
-                  if (!hasDigits(el)) return false;
+                  if (el.querySelector('input')) return false;
+                  const t = (el.textContent || '').trim();
+                  if (t.length < 3 || t.length > 150) return false;
+                  if (!hasDigits(el) && !hasEmail(el)) return false;
                   const r = el.getBoundingClientRect();
                   if (r.width > 500 || r.height > 120 || r.width < 20) return false;
                   return hasX(el);

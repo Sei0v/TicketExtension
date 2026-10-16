@@ -1,1 +1,1 @@
-{"notes": "v4.1 fix: chip detection re-queries live DOM + global chip-pattern fallback (modal re-render detached the old node).", "updated": "2026-10-16", "version": "4.1"}
+{"notes": "v4.2 fix: chip detection also matches email chips (conversations modal shows name+email, no phone).", "updated": "2026-10-16", "version": "4.2"}
