@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.6] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.7] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -54,9 +54,10 @@
   const getDefaultTeam = () => {
     try {
       const saved = (localStorage.getItem('bf_default_team') || '').trim();
-      if (saved) return saved;
+      // Migrated rename: old 'cx rating restaurant' no longer exists.
+      if (saved && saved !== 'cx rating restaurant') return saved;
     } catch (e) {}
-    return 'cx rating restaurant';
+    return 'cx restaurant support';
   };
 
   const isElementVisible = (el) => {
@@ -2478,8 +2479,8 @@
       teamLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
       const teamInput = document.createElement('select');
       teamInput.id = 'bf-settings-team-input';
-      const TEAM_OPTIONS = ['cx rating restaurant', 'cx riders support', 'cx - restaurants', 'cx retention restaurant'];
-      let curTeam = 'cx rating restaurant';
+      const TEAM_OPTIONS = ['cx restaurant support', 'cx riders support', 'cx - restaurants', 'cx retention restaurant'];
+      let curTeam = 'cx restaurant support';
       try { curTeam = getDefaultTeam(); } catch (e) {}
       TEAM_OPTIONS.forEach(opt => {
         const o = document.createElement('option');
@@ -2619,7 +2620,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.6';
+    const TOOL_VERSION = '4.7';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
