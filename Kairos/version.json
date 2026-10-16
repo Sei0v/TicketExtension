@@ -1,1 +1,1 @@
-{"notes": "v3.5: manual customer pick (no auto-select); instant RMS button (cheap DOM reads first, layout pass last resort).", "updated": "2026-10-16", "version": "3.5"}
+{"notes": "v3.6: keyboard commit attempt (ArrowDown+Enter) for the customer chip before manual pick.", "updated": "2026-10-16", "version": "3.6"}
