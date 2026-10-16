@@ -1,1 +1,1 @@
-{"notes": "v4.0: RMS handoff card auto-dismisses once the ticket flow progresses.", "updated": "2026-10-16", "version": "4.0"}
+{"notes": "v4.1 fix: chip detection re-queries live DOM + global chip-pattern fallback (modal re-render detached the old node).", "updated": "2026-10-16", "version": "4.1"}

@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.0] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.1] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.0';
+    const TOOL_VERSION = '4.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4623,6 +4623,8 @@
             const isCustomerSelected = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
               if (cleanP.length < 8) return false;
+              const hasDigits = (el) => (el.textContent || '').replace(/[^0-9]/g, '').includes(cleanP);
+              const hasX = (el) => !!(el.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]'));
               // 1) Precise: contact field via compose testids (ticket page).
               try {
                 const form = composeForm();
@@ -4630,31 +4632,42 @@
                   document.querySelector('[data-testid="compose-header"] [data-field="contact"]');
                 if (contactField) {
                   const hasInput = !!contactField.querySelector('input');
-                  const fieldDigits = (contactField.textContent || '').replace(/[^0-9]/g, '');
-                  if (fieldDigits.includes(cleanP)) {
+                  if (hasDigits(contactField)) {
                     if (!hasInput) return true;
-                    if (contactField.querySelector('svg.lucide-x, [class*="i-lucide-x"], button[class*="flex-shrink"], [class*="chip"]')) return true;
+                    if (hasX(contactField)) return true;
                   }
                 }
               } catch (e) {}
-              // 2) Fallback (conversations modal has no compose testids): climb
-              // from the To input itself to the field container holding the chip.
-              // Guards: skip levels holding the open results list (their digits
-              // are not a committed chip), cap the climb so modal chrome
-              // (e.g. its own close X) can't fake a match.
+              // 2) Live input anchor, re-queried every check (the modal re-renders
+              // on select, so the captured toInput node may be detached).
               try {
-                if (toInput && document.body.contains(toInput)) {
-                  let p = toInput.parentElement;
+                const liveInput = (typeof findToInput === 'function' && findToInput()) || null;
+                if (liveInput && document.body.contains(liveInput)) {
+                  let p = liveInput.parentElement;
                   for (let d = 0; d < 4 && p && p !== document.body; d++) {
                     if (p.querySelector('[role="option"], [role="listbox"]')) { p = p.parentElement; continue; }
-                    const t = (p.textContent || '');
-                    if (t.replace(/[^0-9]/g, '').includes(cleanP)) {
+                    if (hasDigits(p)) {
                       if (!p.querySelector('input')) return true;
-                      if (p.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]')) return true;
+                      if (hasX(p)) return true;
                     }
                     p = p.parentElement;
                   }
                 }
+              } catch (e) {}
+              // 3) Chip pattern anywhere: smallest container holding the phone plus
+              // a remove control (toolbar, results lists and huge containers excluded
+              // so modal chrome can never fake a match).
+              try {
+                const cands = Array.from(document.querySelectorAll('span, div')).filter(el => {
+                  if (el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn')) return false;
+                  if (el.closest('[role="option"], [role="listbox"]')) return false;
+                  if (el.children.length > 4) return false;
+                  if (!hasDigits(el)) return false;
+                  const r = el.getBoundingClientRect();
+                  if (r.width > 500 || r.height > 120 || r.width < 20) return false;
+                  return hasX(el);
+                });
+                if (cands.length) return true;
               } catch (e) {}
               return false;
             };
