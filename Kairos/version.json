@@ -1,1 +1,1 @@
-{"notes": "v3.7 fix: autostart order is authoritative in both fill paths (page scan can no longer override it).", "updated": "2026-10-16", "version": "3.7"}
+{"notes": "v3.8: resume button visible from customer step (forces flow past any detection stall).", "updated": "2026-10-16", "version": "3.8"}

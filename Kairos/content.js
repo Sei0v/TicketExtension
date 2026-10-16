@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.7] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.8] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.7';
+    const TOOL_VERSION = '3.8';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4896,6 +4896,18 @@
               showToast('Click the customer name below — Via will complete automatically.', 'info');
             }
 
+            // Manual resume button (failsafe, visible from here through Via):
+            // if you've done the step yourself and the flow hasn't resumed,
+            // click it and the flow fills at once.
+            let manualGo = false;
+            const resumeBtn = document.createElement('button');
+            resumeBtn.id = 'bf-continue-tree-btn';
+            resumeBtn.type = 'button';
+            resumeBtn.textContent = '✓ Continue filling';
+            resumeBtn.style.cssText = 'position:fixed!important;bottom:80px!important;right:28px!important;z-index:2147483647!important;background:#16a34a!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:12px 18px!important;font-size:14px!important;font-weight:bold!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;';
+            resumeBtn.addEventListener('click', () => { manualGo = true; });
+            try { document.body.appendChild(resumeBtn); } catch (e) {}
+
             let chipOk = isCustomerSelected();
             if (!chipOk) {
               chipOk = await new Promise((resolve) => {
@@ -4909,10 +4921,10 @@
                 };
                 let obs = null;
                 try {
-                  obs = new MutationObserver(() => { if (isCustomerSelected()) finish(true); });
+                  obs = new MutationObserver(() => { if (manualGo || isCustomerSelected()) finish(true); });
                   obs.observe(document.body, { childList: true, subtree: true });
                 } catch (e) { finish(isCustomerSelected()); return; }
-                const iv = setInterval(() => { if (isCustomerSelected()) finish(true); }, 400);
+                const iv = setInterval(() => { if (manualGo || isCustomerSelected()) finish(true); }, 400);
                 setTimeout(() => finish(isCustomerSelected()), 60000);
               });
             }
@@ -5067,15 +5079,8 @@
               return null;
             };
             const isViaSet = () => !!getViaValue();
-            // Manual resume button (failsafe): click it after choosing Via and the tree fills at once
-            let manualGo = false;
-            const resumeBtn = document.createElement('button');
-            resumeBtn.id = 'bf-continue-tree-btn';
-            resumeBtn.type = 'button';
-            resumeBtn.textContent = '✓ Via selected — Fill Tree';
-            resumeBtn.style.cssText = 'position:fixed!important;bottom:80px!important;right:28px!important;z-index:2147483647!important;background:#16a34a!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:12px 18px!important;font-size:14px!important;font-weight:bold!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;';
-            resumeBtn.addEventListener('click', () => { manualGo = true; });
-            try { document.body.appendChild(resumeBtn); } catch (e) {}
+            // Resume button has been visible since the customer step; relabel for Via.
+            try { resumeBtn.textContent = '✓ Via selected — Fill Tree'; } catch (e) {}
             let viaOk = isViaSet();
             if (!viaOk && autoViaRequested) {
               showToast('Test mode: auto-selecting Via (Order Rating)...', 'info');
