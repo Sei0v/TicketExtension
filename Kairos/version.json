@@ -1,1 +1,1 @@
-{"notes": "v3.2: RMS handoff auto-runs the ticket flow on Kairos (opens modal, fills phone + order, leaves it for review).", "updated": "2026-10-16", "version": "3.2"}
+{"notes": "v3.3 fix: autostart ignores DOM-scraped name/phone on list pages (was matching the agent) — params only.", "updated": "2026-10-16", "version": "3.3"}

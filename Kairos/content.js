@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.3] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.2';
+    const TOOL_VERSION = '3.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4435,6 +4435,15 @@
           // picking the agent's own name ("Seif khaled" on every ticket).
           // The name sitting next to the customer phone is the customer.
           let custName = findCustNameNearPhone() || findCustName();
+          // RMS autostart: trust params over DOM (list pages show the agent's
+          // own name and other tickets' numbers — scraping here poisons matching,
+          // so phone is forced from params and the scraped name is dropped).
+          if (autoPreset) {
+            if (extraParams.bf_phone) {
+              try { phone = (typeof formatPhoneForKairos === 'function' && formatPhoneForKairos(extraParams.bf_phone)) || extraParams.bf_phone; } catch (e) { phone = extraParams.bf_phone; }
+            }
+            custName = '';
+          }
 
           // Step 2: If phone not found, click Contact tab so the sidepanel opens.
           // Skipped for RMS autostart (no sidepanel on list pages — phone is preset).
