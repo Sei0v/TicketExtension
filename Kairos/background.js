@@ -20,7 +20,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return false;
     }
 
-    // Open the order page in an inactive/background tab so the user stays on Freshdesk
+    // Open the order page in an inactive/background tab so the user stays on the ticket page
     chrome.tabs.create({ url: orderUrl, active: false }, (newTab) => {
       if (chrome.runtime.lastError || !newTab) {
         sendResponse({

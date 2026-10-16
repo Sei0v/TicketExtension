@@ -1,7 +1,6 @@
 (function () {
   'use strict';
 
-  const isFreshdesk = window.location.host.includes('freshdesk');
   const isBreadfastAdmin = window.location.host.includes('breadfast.com') &&
     (window.location.pathname.includes('post.php') || window.location.pathname.includes('wp-admin'));
   const isFoodRms = window.location.host.includes('food-rms') ||
@@ -9,10 +8,10 @@
 
   const isKairos = window.location.host.includes('kairos');
 
-  if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
+  if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v2.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.0] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2615,7 +2614,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '2.3';
+    const TOOL_VERSION = '3.0';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -2851,7 +2850,7 @@
           container.style.transform = '';
         }
         dockTab.innerHTML = currentSide === 'right' ? '&#9664;' : '&#9654;'; // ◀ / ▶
-        dockTab.title = 'Show Freshdesk Tools (إظهار الأدوات)';
+        dockTab.title = 'Show Tools (إظهار الأدوات)';
         container.style.opacity = '0';
         container.style.pointerEvents = 'none';
       } else {
@@ -2868,7 +2867,7 @@
         }
         // Docked bars keep the chrome applied by applyDockMode — just unhide.
         dockTab.innerHTML = currentSide === 'right' ? '&#9654;' : '&#9664;'; // ▶ / ◀
-        dockTab.title = 'Hide Freshdesk Tools (إخفاء الأدوات)';
+        dockTab.title = 'Hide Tools (إخفاء الأدوات)';
         container.style.opacity = '1';
         container.style.pointerEvents = 'auto';
       }
@@ -5565,45 +5564,24 @@
         return;
       }
 
-      const contactId = extractContactId();
-      const orderNumber = extractOrderNumber();
-      const deliveryBy = extractDeliveryBy();
-
-      const appendParams = (url) => {
-        let res = url;
-        if (orderNumber && isValidOrderNumber(orderNumber)) res += `&bf_order_number=${encodeURIComponent(orderNumber)}`;
-        if (deliveryBy) res += `&bf_delivery_by=${encodeURIComponent(deliveryBy)}`;
-        if (isSenior) res += `&bf_is_senior=1`;
-        for (const [k, v] of Object.entries(extraParams)) {
-          if (v !== undefined && v !== null) {
-            res += `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
-          }
-        }
-        return res;
-      };
-
-      if (contactId) {
-        let NEW_TICKET_URL = appendParams(`https://freshdesk.breadfast.com/a/tickets/new?contactId=${contactId}`);
-        window.open(NEW_TICKET_URL, '_blank', 'noopener,noreferrer');
-      } else {
-        const uid = extractUidWithValidation();
-        const info = extractCustomerInfo();
-
-        if (uid) {
-          let NEW_TICKET_URL = `https://freshdesk.breadfast.com/a/tickets/new?bf_uid=${encodeURIComponent(uid)}`;
-          if (info.name) NEW_TICKET_URL += `&bf_name=${encodeURIComponent(info.name)}`;
-          if (info.email) NEW_TICKET_URL += `&bf_email=${encodeURIComponent(info.email)}`;
-          NEW_TICKET_URL = appendParams(NEW_TICKET_URL);
-          window.open(NEW_TICKET_URL, '_blank', 'noopener,noreferrer');
-        } else {
-          // Resilient fallback: open new ticket with order/delivery/tree params so user only needs to type requester
-          let NEW_TICKET_URL = appendParams(`https://freshdesk.breadfast.com/a/tickets/new?`);
-          if (info.name) NEW_TICKET_URL += `&bf_name=${encodeURIComponent(info.name)}`;
-          if (info.email) NEW_TICKET_URL += `&bf_email=${encodeURIComponent(info.email)}`;
-          window.open(NEW_TICKET_URL, '_blank', 'noopener,noreferrer');
-          showToast('Opened new ticket with Order details. Please type Requester manually.', 'info');
+      // Non-Kairos hosts (RMS): hand the order + customer + tree params to the
+      // Kairos conversations page in a new tab. Freshdesk is no longer used.
+      let kairosParams = [];
+      try {
+        const rd = (typeof extractRmsOrderDetails === 'function') ? extractRmsOrderDetails() : { orderNumber: '', phone: '' };
+        let liveOrder = '';
+        try { liveOrder = (typeof extractOrderNumber === 'function' && extractOrderNumber()) || ''; } catch (e) {}
+        const ord = extraParams.bf_order_number || rd.orderNumber || liveOrder || '';
+        if (ord) kairosParams.push('bf_order_number=' + encodeURIComponent(ord));
+        const ph = ((rd.phone || '') + '').replace(/\D/g, '');
+        if (ph) kairosParams.push('bf_phone=' + encodeURIComponent(ph));
+      } catch (e) {}
+      for (const [k, v] of Object.entries(extraParams)) {
+        if (v !== undefined && v !== null && k !== 'bf_order_number') {
+          kairosParams.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
         }
       }
+      window.open(KAIROS_TICKETS_URL + (kairosParams.length ? '?' + kairosParams.join('&') : ''), '_blank', 'noopener,noreferrer');
 
       setTimeout(() => btnEl.textContent = origText, 2000);
     };
@@ -6062,7 +6040,7 @@
 
       if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.sendMessage) {
         finish();
-        showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
+        showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) للصفحة.', 'error');
         return;
       }
 
@@ -6101,7 +6079,7 @@
         if (!isFinished) {
           finish();
           if ((e.message || '').includes('sendMessage') || (e.message || '').includes('Extension context invalidated')) {
-            showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) لصفحة Freshdesk.', 'error');
+            showToast('تم تحديث الإضافة: يرجى عمل Refresh (F5) للصفحة.', 'error');
           } else {
             showToast('Extension error: ' + e.message, 'error');
           }
@@ -11321,7 +11299,6 @@ Have a good day.`
     systemWrapper.appendChild(systemBtn);
 
     const SYSTEM_ITEMS = [
-      { label: 'Freshdesk', url: 'https://freshdesk.breadfast.com/' },
       { label: 'RMS', url: 'https://food-rms.breadfast.com/orders/list?page=1&limit=10&sortBy=placedAt&sortOrder=desc&datePreset=last8Days' },
       { label: 'Switcher', url: 'https://www.breadfast.com/switcher/' },
       { label: 'Payment panel', url: 'https://payment-panel.breadfast.com/#/orders' },
@@ -11826,11 +11803,10 @@ Have a good day.`
     runAutomations();
   }
 
+  // Toolbar Mount Logic
   // =========================================================================
-  // Freshdesk Logic
-  // =========================================================================
-  // Mount toolbar on Freshdesk, Kairos and RMS (AUTO-SHUTDOWN once mounted to ensure 0% CPU lag)
-  if (window.location.host.includes('freshdesk') || isKairos || isFoodRms) {
+  // Mount toolbar on Kairos and RMS (AUTO-SHUTDOWN once mounted to ensure 0% CPU lag)
+  if (isKairos || isFoodRms) {
     let mountIv = null;
     let observer = null;
 
@@ -11867,27 +11843,6 @@ Have a good day.`
       document.addEventListener('DOMContentLoaded', tryMount);
     } else {
       tryMount();
-    }
-  }
-
-  if (false && window.location.host.includes('freshdesk')) {
-    const freshIv = setInterval(() => {
-      if (document.body) {
-        ensureButtons();
-      }
-    }, 500);
-
-    try {
-      if (document.documentElement) {
-        const observer = new MutationObserver(() => ensureButtons());
-        observer.observe(document.documentElement, { childList: true, subtree: true });
-      }
-    } catch (e) { }
-
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', ensureButtons);
-    } else {
-      ensureButtons();
     }
   }
 
@@ -12074,6 +12029,9 @@ Have a good day.`
   // customer phone (Customer Info card) and opens Kairos customer search in a
   // new tab carrying bf_order_number + bf_phone.
   // =========================================================================
+  // Kairos conversations page: destination for new tickets handed off from RMS.
+  const KAIROS_TICKETS_URL = 'https://kairos.breadfast.com/app/accounts/1/tickets/breached_slas/mine/conversations';
+
   function extractRmsOrderDetails() {
     let orderNumber = '';
     let phone = '';
@@ -12109,7 +12067,7 @@ Have a good day.`
       showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
       return false;
     }
-    const url = 'https://kairos.breadfast.com/app/accounts/1/search?q=' + encodeURIComponent(d.phone) + '&bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
+    const url = KAIROS_TICKETS_URL + '?bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
     try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
     if (btnEl) {
       btnEl.textContent = '✓ Opened';
