@@ -1,1 +1,1 @@
-{"notes": "v4.3: green resume button removed; RMS Tree uses instant order read (no settle/cache/refresh/scroll waits).", "updated": "2026-10-16", "version": "4.3"}
+{"notes": "v4.4: removed duplicate RMS Ticket button (Normal Ticket does the handoff).", "updated": "2026-10-16", "version": "4.4"}

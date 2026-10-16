@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.4] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.3';
+    const TOOL_VERSION = '4.4';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11542,15 +11542,6 @@ Have a good day.`
     container.appendChild(calcBtn);
     if (!isFoodRms) container.appendChild(emailBtn);
     container.appendChild(sheetsWrapper);
-
-    // RMS order-details handoff (details pages only): Ticket button opens
-    // Kairos customer search carrying order # + phone.
-    if (isFoodRms && window.location.pathname.includes('/orders/details/')) {
-      const rmsTicketBtn = createBtn('btn-rms-ticket', '🎫 Ticket', '#0d9488');
-      rmsTicketBtn.title = 'Open customer in Kairos with this order + phone';
-      rmsTicketBtn.addEventListener('click', () => rmsTicketHandoff(rmsTicketBtn));
-      container.appendChild(rmsTicketBtn);
-    }
 
     document.body.appendChild(container);
     document.body.appendChild(dockTab);
