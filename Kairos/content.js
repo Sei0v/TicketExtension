@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.7] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.8] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -1454,13 +1454,18 @@
     return null;
   };
 
-  // Subject format: "{Type} - {last tree item} - {order}" (e.g. "Complaint -
-  // Foreign objects - 0610-123456789"). Type-first word from the tree choice.
-  const subjectTypeFirst = (treeType) => {
+  // Subject format: "{Type} - {last tree item} - {order}". Internal Requests
+  // split by category: Rider Support → "rider sup", Restaurant Support → "RST supp".
+  const subjectTypeFirst = (treeType, category = '') => {
     const t = (treeType || '').trim().toLowerCase();
     if (t.includes('complain')) return 'Complaint';
     if (t.includes('feedback')) return 'Feedback';
-    if (t.includes('internal')) return 'Internal Request';
+    if (t.includes('internal')) {
+      const c = (category || '').trim().toLowerCase();
+      if (c.includes('rider')) return 'rider sup';
+      if (c.includes('restaurant')) return 'RST supp';
+      return 'Internal Request';
+    }
     return (treeType || '').trim();
   };
   const subjectLastItem = (...items) => {
@@ -1505,7 +1510,7 @@
     }
 
     let subjectVal = '';
-    const typeFirst = subjectTypeFirst(treeType);
+    const typeFirst = subjectTypeFirst(treeType, category);
     const lastItem = subjectLastItem(category, detail, subDetail);
 
     const parts = [];
@@ -2620,7 +2625,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.7';
+    const TOOL_VERSION = '4.8';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -5614,7 +5619,7 @@
               // Subject: "{Type} - {last tree item} - orderNumber"
               // (e.g. "Complaint - Foreign objects - 0610-123456789")
               const subjParts = [];
-              const subjType = subjectTypeFirst(tType);
+              const subjType = subjectTypeFirst(tType, tCat);
               const subjLast = subjectLastItem(tCat, tDet, tSub);
               if (subjType) subjParts.push(subjType);
               if (subjLast) subjParts.push(subjLast);
