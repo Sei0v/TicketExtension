@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.4] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.3';
+    const TOOL_VERSION = '3.4';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4806,9 +4806,9 @@
               return null;
             };
 
-            // TEST auto mode: click the recipient card ourselves (no manual click).
-            // Main flow keeps the manual click (proven reliable); test-only here.
-            if (autoViaRequested && !isCustomerSelected()) {
+            // Auto mode: click the recipient card ourselves (RMS autostart runs
+            // hands-free; main flow keeps the manual click).
+            if ((autoViaRequested || autoPreset) && !isCustomerSelected()) {
               showToast('Test mode: auto-selecting customer...', 'info');
               console.log('[BF Kairos] TEST auto-customer attempt...');
               const describeEl = (el) => {
@@ -5085,6 +5085,7 @@
             }
             if (!viaOk) {
               showToast('Now choose Via yourself — the tree will complete automatically.', 'info');
+              console.log('[BF Kairos] Waiting for Via selection (pick Via, or press the green resume button)...');
               viaOk = await new Promise((resolve) => {
                 let done = false;
                 const finish = (v) => {

@@ -1,1 +1,1 @@
-{"notes": "v3.3 fix: autostart ignores DOM-scraped name/phone on list pages (was matching the agent) — params only.", "updated": "2026-10-16", "version": "3.3"}
+{"notes": "v3.4: RMS autostart auto-selects the customer (phone-precise); Via stays manual + resume button + wait logging.", "updated": "2026-10-16", "version": "3.4"}
