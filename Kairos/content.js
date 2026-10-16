@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v5.1.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1.3] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -58,6 +58,42 @@
     } catch (e) {}
     return 'cx restaurant support';
   };
+
+  // Shared store: localStorage is per-origin (Kairos ≠ RMS), but
+  // chrome.storage is shared extension-wide — the Team must stay the same
+  // on both sides, so it is mirrored there on every save and hydrated here.
+  const sharedStore = {
+    get(keys, cb) {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.get(keys, (res) => { try { cb(res || {}); } catch (e) { cb({}); } });
+          return;
+        }
+      } catch (e) {}
+      try { cb({}); } catch (e) {}
+    },
+    set(obj) {
+      try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+          chrome.storage.local.set(obj, () => { try { void chrome.runtime.lastError; } catch (e) {} });
+        }
+      } catch (e) {}
+    }
+  };
+  try {
+    sharedStore.get(['bf_default_team'], (res) => {
+      try {
+        const shared = res && res.bf_default_team;
+        let local = null;
+        try { local = localStorage.getItem('bf_default_team'); } catch (e) {}
+        if (shared) {
+          try { localStorage.setItem('bf_default_team', shared); } catch (e) {}
+        } else if (local) {
+          sharedStore.set({ bf_default_team: local });
+        }
+      } catch (e) {}
+    });
+  } catch (e) {}
 
   const isElementVisible = (el) => {
     if (!el) return false;
@@ -2581,6 +2617,7 @@
         const v = (teamInput.value || '').trim();
         if (!v) { showToast('Type a team name first.', 'error'); return; }
         try { localStorage.setItem('bf_default_team', v); } catch (e) {}
+        try { sharedStore.set({ bf_default_team: v }); } catch (e) {}
         const layoutVal = layoutSelect.value && TOOLBAR_LAYOUTS[layoutSelect.value] ? layoutSelect.value : 'list';
         try { localStorage.setItem('bf_toolbar_layout', layoutVal); } catch (e) {}
         const secVal = dockSelect.value && DOCK_MODES[dockSelect.value] ? dockSelect.value : 'floating';
@@ -2625,7 +2662,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.2';
+    const TOOL_VERSION = '5.1.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
