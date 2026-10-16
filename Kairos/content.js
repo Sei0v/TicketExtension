@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.9] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.0] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2626,7 +2626,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.9';
+    const TOOL_VERSION = '5.0';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4571,6 +4571,9 @@
           };
 
           let toInput = null;
+          // Remembered To-field box (the modal re-renders on select, so the
+          // live input node may detach — the box usually survives).
+          let toFieldAnchor = null;
           const waitModalStart = Date.now();
           let penRetried = false;
           while (Date.now() - waitModalStart < 5000) {
@@ -4623,67 +4626,78 @@
             }
 
             showToast(`CST Phone entered: ${phone}`, 'info');
+            try { toFieldAnchor = (toInput && toInput.parentElement) || null; } catch (e) { toFieldAnchor = null; }
 
             // Helper to check if Customer is committed as a chip in To field.
-            // Committed chips show phone digits AND/OR the contact email
-            // (conversations modal chips show name + email, no phone).
+            // Chips may show digits, an email, or just the name ("Sarah Nour").
+            // Core signal: the To area holds real content while nothing is being
+            // typed (no input with a value) and no results list is open.
             const isCustomerSelected = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
               if (cleanP.length < 8) return false;
-              const hasDigits = (el) => (el.textContent || '').replace(/[^0-9]/g, '').includes(cleanP);
-              const hasEmail = (el) => { const t = (el.textContent || ''); return t.includes('@') && t.includes('.'); };
+              // Text minus typed-but-uncommitted input values.
+              const committedText = (el) => {
+                try {
+                  const clone = el.cloneNode(true);
+                  clone.querySelectorAll('input, textarea').forEach(i => { try { i.remove(); } catch (e) {} });
+                  return (clone.textContent || '');
+                } catch (e) { return (el.textContent || ''); }
+              };
+              const hasDigits = (t) => t.replace(/[^0-9]/g, '').includes(cleanP);
+              const hasEmail = (t) => t.includes('@') && t.includes('.');
               const hasX = (el) => !!(el.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]'));
               const hasOptions = (el) => !!(el.querySelector('[role="option"], [role="listbox"]'));
+              const isGeneric = (t) => {
+                const s = (t || '').trim();
+                return !s || s.length < 3 || s.length > 150 ||
+                  /search by|enter at least|show inboxes|via:/i.test(s);
+              };
+              // One rule for any To-area container: no open results, nothing
+              // being typed, and real content (digits, email, or a named chip
+              // carrying a remove control).
+              const areaCommitted = (container) => {
+                if (!container || !document.body.contains(container)) return false;
+                if (hasOptions(container)) return false;
+                const liveInp = container.querySelector('input');
+                if (liveInp && (liveInp.value || '').trim()) return false;
+                const t = committedText(container);
+                if (hasDigits(t) || hasEmail(t)) return true;
+                return !isGeneric(t) && hasX(container);
+              };
               // 1) Precise: contact field via compose testids (ticket page).
               try {
                 const form = composeForm();
                 const contactField = form?.querySelector('[data-field="contact"]') ||
                   document.querySelector('[data-testid="compose-header"] [data-field="contact"]');
-                if (contactField) {
-                  const hasInput = !!contactField.querySelector('input');
-                  if (hasDigits(contactField)) {
-                    if (!hasInput) return true;
-                    if (hasX(contactField)) return true;
-                  }
-                  // Email chip (no phone digits) — only when no results list is
-                  // open inside the field (its rows also carry emails).
-                  if (!hasOptions(contactField) && hasEmail(contactField)) {
-                    if (!hasInput) return true;
-                    if (hasX(contactField)) return true;
-                  }
-                }
+                if (contactField && areaCommitted(contactField)) return true;
               } catch (e) {}
-              // 2) Live input anchor, re-queried every check (the modal re-renders
-              // on select, so the captured toInput node may be detached).
+              // 2) Remembered To-field box (survives input replacement on select).
+              try {
+                if (toFieldAnchor && areaCommitted(toFieldAnchor)) return true;
+              } catch (e) {}
+              // 3) Live climb from a fresh To input lookup.
               try {
                 const liveInput = (typeof findToInput === 'function' && findToInput()) || null;
                 if (liveInput && document.body.contains(liveInput)) {
                   let p = liveInput.parentElement;
                   for (let d = 0; d < 4 && p && p !== document.body; d++) {
-                    if (p.querySelector('[role="option"], [role="listbox"]')) { p = p.parentElement; continue; }
-                    const dMatch = hasDigits(p);
-                    const eMatch = hasEmail(p);
-                    if (dMatch || eMatch) {
-                      if (!p.querySelector('input')) return true;
-                      if (hasX(p)) return true;
-                    }
+                    if (areaCommitted(p)) return true;
                     p = p.parentElement;
                   }
                 }
               } catch (e) {}
-              // 3) Chip pattern anywhere: small container holding the phone or an
-              // email plus a remove control — and never while typing (an input
-              // inside means nothing committed yet). Toolbar, results lists and
-              // huge containers excluded so modal chrome can't fake a match.
+              // 4) Chip pattern anywhere (last resort): small container with
+              // phone/email plus a remove control — never while typing.
               try {
                 const cands = Array.from(document.querySelectorAll('span, div')).filter(el => {
                   if (el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn')) return false;
                   if (el.closest('[role="option"], [role="listbox"]')) return false;
                   if (el.children.length > 4) return false;
-                  if (el.querySelector('input')) return false;
-                  const t = (el.textContent || '').trim();
+                  const inp = el.querySelector('input');
+                  if (inp && (inp.value || '').trim()) return false;
+                  const t = committedText(el).trim();
                   if (t.length < 3 || t.length > 150) return false;
-                  if (!hasDigits(el) && !hasEmail(el)) return false;
+                  if (!hasDigits(t) && !hasEmail(t)) return false;
                   const r = el.getBoundingClientRect();
                   if (r.width > 500 || r.height > 120 || r.width < 20) return false;
                   return hasX(el);
