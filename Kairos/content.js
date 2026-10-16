@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.6] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.7] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.6';
+    const TOOL_VERSION = '3.7';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4888,25 +4888,6 @@
               console.log('[BF Kairos] TEST auto-customer result:', isCustomerSelected());
             }
 
-            // Keyboard commit attempt: listboxes commit the top result on
-            // ArrowDown + Enter through their own key handling (no fragile
-            // synthetic clicking). Harmless if no results — manual click follows.
-            if (!isCustomerSelected()) {
-              try {
-                await new Promise(r => setTimeout(r, 1500));
-                if (!isCustomerSelected() && toInput && document.body.contains(toInput)) {
-                  try { toInput.focus(); } catch (e) {}
-                  for (const k of [['ArrowDown', 40], ['Enter', 13]]) {
-                    toInput.dispatchEvent(new KeyboardEvent('keydown', { key: k[0], keyCode: k[1], which: k[1], bubbles: true }));
-                    toInput.dispatchEvent(new KeyboardEvent('keyup', { key: k[0], keyCode: k[1], which: k[1], bubbles: true }));
-                    await new Promise(r => setTimeout(r, 250));
-                  }
-                  await new Promise(r => setTimeout(r, 800));
-                  if (isCustomerSelected()) console.log('[BF Kairos] Customer chip committed via keyboard.');
-                }
-              } catch (e) {}
-            }
-
             // FOOLPROOF selection: the extension NEVER clicks search results (synthetic clicks
             // kept hitting sidebar/background). It types the phone, then YOU click the customer name
             // with your own mouse — 100% reliable — and the extension auto-resumes with Via.
@@ -5201,13 +5182,17 @@
               // stored only fills in when live is unavailable.
               // Conflict between stored captures and live DOM = possible transitional
               // render (previous ticket still on screen): settle before trusting live.
-              if (liveNo && orderNo && liveNo !== orderNo) {
+              if (autoPreset && orderNo) {
+                console.log('[BF Kairos] Autostart: skipping live-settle, order fixed:', orderNo);
+              } else if (liveNo && orderNo && liveNo !== orderNo) {
                 console.log('[BF Kairos] Order conflict (stored vs live) — settling:', orderNo, 'vs', liveNo);
                 try {
                   liveNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000) || '';
                 } catch (e) { liveNo = ''; }
               }
-              if (liveNo) {
+              if (autoPreset && orderNo) {
+                console.log('[BF Kairos] Autostart: keeping order, ignoring page scan:', liveNo || '(none)');
+              } else if (liveNo) {
                 if (orderNo && orderNo !== liveNo) console.log('[BF Kairos] Live order overrides stored:', orderNo, '→', liveNo);
                 orderNo = liveNo;
               }
@@ -5449,13 +5434,17 @@
               // stored only fills in when live is unavailable.
               // Conflict between stored captures and live DOM = possible transitional
               // render (previous ticket still on screen): settle before trusting live.
-              if (liveNo && orderNo && liveNo !== orderNo) {
+              if (autoPreset && orderNo) {
+                console.log('[BF Kairos] Autostart: skipping live-settle, order fixed:', orderNo);
+              } else if (liveNo && orderNo && liveNo !== orderNo) {
                 console.log('[BF Kairos] Order conflict (stored vs live) — settling:', orderNo, 'vs', liveNo);
                 try {
                   liveNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000) || '';
                 } catch (e) { liveNo = ''; }
               }
-              if (liveNo) {
+              if (autoPreset && orderNo) {
+                console.log('[BF Kairos] Autostart: keeping order, ignoring page scan:', liveNo || '(none)');
+              } else if (liveNo) {
                 if (orderNo && orderNo !== liveNo) console.log('[BF Kairos] Live order overrides stored:', orderNo, '→', liveNo);
                 orderNo = liveNo;
               }

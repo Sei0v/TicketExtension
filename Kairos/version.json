@@ -1,1 +1,1 @@
-{"notes": "v3.6: keyboard commit attempt (ArrowDown+Enter) for the customer chip before manual pick.", "updated": "2026-10-16", "version": "3.6"}
+{"notes": "v3.7 fix: autostart order is authoritative in both fill paths (page scan can no longer override it).", "updated": "2026-10-16", "version": "3.7"}
