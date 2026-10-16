@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.5] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.4';
+    const TOOL_VERSION = '3.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4806,9 +4806,9 @@
               return null;
             };
 
-            // Auto mode: click the recipient card ourselves (RMS autostart runs
-            // hands-free; main flow keeps the manual click).
-            if ((autoViaRequested || autoPreset) && !isCustomerSelected()) {
+            // Auto mode (test only): click the recipient card ourselves.
+            // Main + RMS flows keep the manual click (you pick the customer).
+            if (autoViaRequested && !isCustomerSelected()) {
               showToast('Test mode: auto-selecting customer...', 'info');
               console.log('[BF Kairos] TEST auto-customer attempt...');
               const describeEl = (el) => {
@@ -12093,18 +12093,26 @@ Have a good day.`
     let orderNumber = '';
     let phone = '';
     try {
-      const bodyText = (document.body && document.body.innerText) || '';
-      const om = bodyText.match(/#(\d{4}-\d{5,14})/);
+      // Order: header span first (cheap textContent — no layout pass),
+      // full-page scan only as last resort (innerText forces layout = slow).
+      const orderEl = document.querySelector('span.text-xl');
+      let om = ((orderEl && orderEl.textContent) || '').match(/#?(\d{4}-\d{5,14})/);
+      if (!om) {
+        const bt = (document.body && document.body.innerText) || '';
+        om = bt.match(/#(\d{4}-\d{5,14})/);
+      }
       if (om) orderNumber = om[1];
-      const spans = Array.from(document.querySelectorAll('span'));
+      // Phone: label-anchored via textContent (cheap), full-page scan last resort.
+      const spans = document.querySelectorAll('span');
       for (const s of spans) {
         if ((s.textContent || '').trim() !== 'Phone Number') continue;
         const scope = (s.closest('div') && s.closest('div').parentElement) || s.parentElement;
-        const pm = ((scope && scope.innerText) || '').match(/(\+?201[0125]\d{8})/);
+        const pm = ((scope && scope.textContent) || '').match(/(\+?201[0125]\d{8})/);
         if (pm) { phone = pm[1]; break; }
       }
       if (!phone) {
-        const pm2 = bodyText.match(/(\+?201[0125]\d{8})/);
+        const bt2 = (document.body && document.body.innerText) || '';
+        const pm2 = bt2.match(/(\+?201[0125]\d{8})/);
         if (pm2) phone = pm2[1];
       }
     } catch (e) {}
