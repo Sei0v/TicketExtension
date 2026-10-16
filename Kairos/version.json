@@ -1,1 +1,1 @@
-{"notes": "v4.5: RMS Tree handoff skips the slow ticket-DOM order scan when order is known (opens instantly).", "updated": "2026-10-16", "version": "4.5"}
+{"notes": "v4.6 fix: modal Order lookup also covers the conversations composer properties panel (was compose-form only).", "updated": "2026-10-16", "version": "4.6"}

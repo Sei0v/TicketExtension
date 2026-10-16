@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.5] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.6] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.5';
+    const TOOL_VERSION = '4.6';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -5256,20 +5256,27 @@
             async function typeModalOrderNo(orderNo) {
               if (!orderNo) return false;
               // Modal-scoped lookup only — never touch the background ticket's Order field.
+              // Covers both the ticket-page modal (compose-form) and the
+              // conversations composer (Order lives in its properties panel).
               const findOrderInput = () => {
                 try {
                   const form = composeForm();
-                  if (!form || !document.body.contains(form)) return null;
-                  const direct = form.querySelector('[data-field*="order" i] input, [data-testid*="order" i] input');
-                  if (direct && !direct.disabled) return direct;
-                  const lbls = Array.from(form.querySelectorAll('span, label'));
-                  for (const l of lbls) {
-                    if (/^order number$/i.test((l.textContent || '').trim())) {
-                      let p = l.parentElement;
-                      for (let d = 0; d < 4 && p && p !== document.body && form.contains(p); d++) {
-                        const inp = p.querySelector('input');
-                        if (inp && !inp.disabled && form.contains(inp)) return inp;
-                        p = p.parentElement;
+                  const dlg = document.querySelector('[role="dialog"]');
+                  const scopes = [];
+                  if (form && document.body.contains(form)) scopes.push(form);
+                  if (dlg && document.body.contains(dlg) && dlg !== form) scopes.push(dlg);
+                  for (const scope of scopes) {
+                    const direct = scope.querySelector('[data-field*="order" i] input, [data-testid*="order" i] input');
+                    if (direct && !direct.disabled) return direct;
+                    const lbls = Array.from(scope.querySelectorAll('span, label'));
+                    for (const l of lbls) {
+                      if (/^order number$/i.test((l.textContent || '').trim())) {
+                        let p = l.parentElement;
+                        for (let d = 0; d < 4 && p && p !== document.body && scope.contains(p); d++) {
+                          const inp = p.querySelector('input');
+                          if (inp && !inp.disabled && scope.contains(inp)) return inp;
+                          p = p.parentElement;
+                        }
                       }
                     }
                   }
