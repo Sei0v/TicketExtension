@@ -1,1 +1,1 @@
-{"notes": "v4.2 fix: chip detection also matches email chips (conversations modal shows name+email, no phone).", "updated": "2026-10-16", "version": "4.2"}
+{"notes": "v4.3: green resume button removed; RMS Tree uses instant order read (no settle/cache/refresh/scroll waits).", "updated": "2026-10-16", "version": "4.3"}

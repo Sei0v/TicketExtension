@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v4.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v4.3] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '4.2';
+    const TOOL_VERSION = '4.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4947,18 +4947,6 @@
               showToast('Click the customer name below — Via will complete automatically.', 'info');
             }
 
-            // Manual resume button (failsafe, visible from here through Via):
-            // if you've done the step yourself and the flow hasn't resumed,
-            // click it and the flow fills at once.
-            let manualGo = false;
-            const resumeBtn = document.createElement('button');
-            resumeBtn.id = 'bf-continue-tree-btn';
-            resumeBtn.type = 'button';
-            resumeBtn.textContent = '✓ Continue filling';
-            resumeBtn.style.cssText = 'position:fixed!important;bottom:80px!important;right:28px!important;z-index:2147483647!important;background:#16a34a!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:12px 18px!important;font-size:14px!important;font-weight:bold!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;';
-            resumeBtn.addEventListener('click', () => { manualGo = true; });
-            try { document.body.appendChild(resumeBtn); } catch (e) {}
-
             let chipOk = isCustomerSelected();
             if (!chipOk) {
               chipOk = await new Promise((resolve) => {
@@ -4972,10 +4960,10 @@
                 };
                 let obs = null;
                 try {
-                  obs = new MutationObserver(() => { if (manualGo || isCustomerSelected()) finish(true); });
+                  obs = new MutationObserver(() => { if (isCustomerSelected()) finish(true); });
                   obs.observe(document.body, { childList: true, subtree: true });
                 } catch (e) { finish(isCustomerSelected()); return; }
-                const iv = setInterval(() => { if (manualGo || isCustomerSelected()) finish(true); }, 400);
+                const iv = setInterval(() => { if (isCustomerSelected()) finish(true); }, 400);
                 setTimeout(() => finish(isCustomerSelected()), 60000);
               });
             }
@@ -5130,8 +5118,6 @@
               return null;
             };
             const isViaSet = () => !!getViaValue();
-            // Resume button has been visible since the customer step; relabel for Via.
-            try { resumeBtn.textContent = '✓ Via selected — Fill Tree'; } catch (e) {}
             let viaOk = isViaSet();
             if (!viaOk && autoViaRequested) {
               showToast('Test mode: auto-selecting Via (Order Rating)...', 'info');
@@ -5149,19 +5135,16 @@
                   done = true;
                   try { obs.disconnect(); } catch (e) {}
                   try { clearInterval(iv); } catch (e) {}
-                  try { resumeBtn.remove(); } catch (e) {}
                   resolve(v);
                 };
                 let obs = null;
                 try {
-                  obs = new MutationObserver(() => { if (manualGo || isViaSet()) finish(true); });
+                  obs = new MutationObserver(() => { if (isViaSet()) finish(true); });
                   obs.observe(document.body, { childList: true, subtree: true, characterData: true });
                 } catch (e) { finish(isViaSet()); return; }
-                const iv = setInterval(() => { if (manualGo || isViaSet()) finish(true); }, 400);
+                const iv = setInterval(() => { if (isViaSet()) finish(true); }, 400);
                 setTimeout(() => finish(isViaSet()), 60000);
               });
-            } else {
-              try { resumeBtn.remove(); } catch (e) {}
             }
             if (!viaOk) {
               console.warn('[BF Kairos] Via was not selected (timeout) — leaving modal open.');
@@ -9493,21 +9476,22 @@ Have a good day.`
             // Remember last tree so Create Ticket can reuse it when pressed directly.
             // Live-first (like the Email button): the store may hold a previous ticket's
             // number while the sidepanel already shows the current one.
+            // RMS fast path: single direct read — no settling, cache, or refresh waits.
             let savedOrderNo = '';
-            try { savedOrderNo = extractOrderNumber() || ''; } catch (e) {}
+            try { savedOrderNo = isFoodRms ? extractRmsOrderDetails().orderNumber || '' : extractOrderNumber() || ''; } catch (e) {}
             // Right after SPA navigation the DOM may still show the previous
             // ticket: require a settled (twice-stable) read before trusting it.
-            if (savedOrderNo && justNavigated()) {
+            if (!isFoodRms && savedOrderNo && justNavigated()) {
               try {
                 const settledNo = await settledTicketRead(() => extractOrderNumber(), isValidOrderNumber, 3000);
                 if (settledNo) savedOrderNo = settledNo;
                 else { savedOrderNo = ''; console.log('[BF Kairos] Tree-pick order unsettled — refetching below.'); }
               } catch (e) {}
             }
-            try { if (!savedOrderNo) savedOrderNo = readCachedTicketOrder() || ''; } catch (e) {}
-            try { if (!savedOrderNo) { const st = await refreshTicketStore(false); savedOrderNo = (st && st.orderNumber) || ''; } } catch (e) {}
+            try { if (!isFoodRms && !savedOrderNo) savedOrderNo = readCachedTicketOrder() || ''; } catch (e) {}
+            try { if (!isFoodRms && !savedOrderNo) { const st = await refreshTicketStore(false); savedOrderNo = (st && st.orderNumber) || ''; } } catch (e) {}
             // Order block may be collapsed/unloaded — hit Refresh and retry before saving
-            if (!savedOrderNo) {
+            if (!isFoodRms && !savedOrderNo) {
               try {
                 const blk = Array.from(document.querySelectorAll('[data-testid="object-attribute"]')).find(el =>
                   !el.closest('#bf-custom-ticket-buttons, [data-testid="compose-form"]') && /order number/i.test(el.textContent || ''));
@@ -9529,7 +9513,7 @@ Have a good day.`
               applyTreeToForm(treeType, category, detail, subDetail);
             } else {
               // Scroll to top so ticket fields (ID, order, UID) are visible before extraction
-              await scrollToTicketTop();
+              if (!isFoodRms) await scrollToTicketTop();
               openTicketPage(treeBtn, 'Tree', {
                 bf_tree_type: treeType,
                 bf_category: category,
