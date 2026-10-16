@@ -1,1 +1,1 @@
-{"notes": "v5.0: chip detection by To-area content (name-only chips work), not phone hunting.", "updated": "2026-10-17", "version": "5.0"}
+{"notes": "v5.1: warns when number matches no recipient (CST name mismatch) but continues anyway.", "updated": "2026-10-17", "version": "5.1"}

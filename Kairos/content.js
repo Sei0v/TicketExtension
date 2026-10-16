@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v5.0] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2626,7 +2626,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.0';
+    const TOOL_VERSION = '5.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4968,6 +4968,30 @@
               showToast('Click the customer name below — Via will complete automatically.', 'info');
             }
 
+            // Number/name sanity: verify the typed number actually matches a
+            // search result. If not (number filed under a different name),
+            // warn loudly but continue anyway for manual verification.
+            try {
+              const cleanM = (phone || '').replace(/[^0-9]/g, '');
+              let phoneMatched = false;
+              if (cleanM.length > 7) {
+                const mt0 = Date.now();
+                while (Date.now() - mt0 < 4000 && !phoneMatched) {
+                  await new Promise(r => setTimeout(r, 300));
+                  let card = null;
+                  try { card = findRecipientCard(); } catch (e) {}
+                  if (card && document.body.contains(card) &&
+                      (card.textContent || '').replace(/[^0-9]/g, '').includes(cleanM)) {
+                    phoneMatched = true;
+                  }
+                }
+              }
+              if (!phoneMatched) {
+                console.warn('[BF Kairos] No phone-matching recipient found.');
+                showToast("CST name doesn't match this number — verify the customer manually, continuing anyway.", 'error');
+              }
+            } catch (e) {}
+
             let chipOk = isCustomerSelected();
             if (!chipOk) {
               chipOk = await new Promise((resolve) => {
@@ -4991,8 +5015,12 @@
 
             if (!chipOk) {
               console.warn('[BF Kairos] Customer was not selected (timeout).');
-              showToast('Customer not selected — modal left open.', 'error');
-              return;
+              if (autoPreset) {
+                showToast('Customer not picked — continuing anyway, verify recipient manually.', 'error');
+              } else {
+                showToast('Customer not selected — modal left open.', 'error');
+                return;
+              }
             }
             console.log('[BF Kairos] Customer chip committed.');
 
