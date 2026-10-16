@@ -11,7 +11,12 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.0] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.1] Script active on host:', window.location.host);
+
+  // Kairos conversations page: destination for new tickets handed off from RMS.
+  // Defined here at the top (not at the file end) because the RMS details
+  // branch returns early — anything defined after it would stay uninitialized.
+  const KAIROS_TICKETS_URL = 'https://kairos.breadfast.com/app/accounts/1/tickets/breached_slas/mine/conversations';
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2614,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.0';
+    const TOOL_VERSION = '3.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -12029,9 +12034,6 @@ Have a good day.`
   // customer phone (Customer Info card) and opens Kairos customer search in a
   // new tab carrying bf_order_number + bf_phone.
   // =========================================================================
-  // Kairos conversations page: destination for new tickets handed off from RMS.
-  const KAIROS_TICKETS_URL = 'https://kairos.breadfast.com/app/accounts/1/tickets/breached_slas/mine/conversations';
-
   function extractRmsOrderDetails() {
     let orderNumber = '';
     let phone = '';

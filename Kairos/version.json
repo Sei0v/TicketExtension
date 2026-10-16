@@ -1,1 +1,1 @@
-{"notes": "v3.0 Kairos-only: Freshdesk removed (gate, mount, ticket URLs, menu link, manifest); RMS handoff opens Kairos breached_slas conversations.", "updated": "2026-10-16", "version": "3.0"}
+{"notes": "v3.1 fix: RMS details early-return left KAIROS_TICKETS_URL uninitialized (buttons crashed). Moved to top.", "updated": "2026-10-16", "version": "3.1"}
