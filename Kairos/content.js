@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.1] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.2] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.1';
+    const TOOL_VERSION = '3.2';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4295,6 +4295,9 @@
       btnEl.textContent = 'Creating...';
 
       const isSenior = origText === 'Senior Ticket';
+      // RMS autostart (bf_autostart=1): phone + order arrive preset in params —
+      // list pages have no sidepanel/Order block, so DOM scraping is skipped.
+      const autoPreset = extraParams.bf_autostart === '1' || extraParams.bf_autostart === 1;
       // Test-tree auto mode: auto-select customer chip (already attempted) AND
       // Via=Order Rating, so no manual clicks are needed. Main buttons unaffected.
       const autoViaRequested = extraParams.bf_auto_via === true || extraParams.bf_auto_via === '1';
@@ -4433,8 +4436,9 @@
           // The name sitting next to the customer phone is the customer.
           let custName = findCustNameNearPhone() || findCustName();
 
-          // Step 2: If phone not found, click Contact tab so the sidepanel opens
-          if (!phone || !custName) {
+          // Step 2: If phone not found, click Contact tab so the sidepanel opens.
+          // Skipped for RMS autostart (no sidepanel on list pages — phone is preset).
+          if ((!phone || !custName) && !autoPreset) {
             const contactTab = document.querySelector('button[data-testid="conversation-sidepanel-tab-contact"], [data-testid="conversation-sidepanel-tab-contact"]') ||
               Array.from(document.querySelectorAll('button[data-testid*="sidepanel-tab"]')).find(b => (b.textContent || '').toLowerCase().includes('contact'));
 
@@ -4466,6 +4470,12 @@
                 if (sName) custName = sName;
               } catch (e) {}
             }
+          }
+
+          // RMS autostart: phone comes preset in params (list pages have no sidepanel).
+          if (!phone && extraParams.bf_phone) {
+            try { phone = (typeof formatPhoneForKairos === 'function' && formatPhoneForKairos(extraParams.bf_phone)) || extraParams.bf_phone; } catch (e) {}
+            if (phone) console.log('[BF Kairos] Using preset phone from params:', phone);
           }
 
           if (phone) {
@@ -4500,6 +4510,11 @@
               const st = await refreshTicketStore(true);
               preModalOrderNo = (st && st.orderNumber) || '';
             } catch (e) {}
+          }
+          // RMS autostart: trust the passed order (list pages have no Order block —
+          // any value scraped there would belong to another ticket).
+          if (autoPreset && extraParams.bf_order_number) {
+            try { if (isValidOrderNumber(extraParams.bf_order_number)) preModalOrderNo = extraParams.bf_order_number; } catch (e) {}
           }
           if (preModalOrderNo) console.log('[BF Kairos] Pre-modal order number:', preModalOrderNo, 'tid:', (function () { try { return getCurrentTicketId(); } catch (e) { return '?'; } })(), 'path:', window.location.pathname);
 
@@ -5581,6 +5596,7 @@
         const ph = ((rd.phone || '') + '').replace(/\D/g, '');
         if (ph) kairosParams.push('bf_phone=' + encodeURIComponent(ph));
       } catch (e) {}
+      kairosParams.push('bf_autostart=1');
       for (const [k, v] of Object.entries(extraParams)) {
         if (v !== undefined && v !== null && k !== 'bf_order_number') {
           kairosParams.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
@@ -11490,6 +11506,35 @@ Have a good day.`
     // (No standalone applyCustomPos here — applyDockMode already positions,
     // and a stale drag pos must never override a docked bar.)
     try { enableToolbarDrag(); } catch (e) {}
+    // RMS autostart: opened from RMS with bf_phone + bf_order_number + bf_autostart=1
+    // → wait for the Kairos app to render, then run the normal ticket flow alone.
+    // Runs once per page load; the modal is left open for agent review (never sent).
+    try {
+      if (isKairos && !window.__bfAutoTicketDone) {
+        const autoUsp = new URLSearchParams(window.location.search);
+        if (autoUsp.get('bf_autostart') === '1' && autoUsp.get('bf_phone')) {
+          window.__bfAutoTicketDone = true;
+          const autoBtn = document.createElement('div');
+          const autoParams = { bf_order_number: autoUsp.get('bf_order_number') || '', bf_phone: autoUsp.get('bf_phone') || '', bf_autostart: '1' };
+          for (const k of ['bf_tree_type', 'bf_category', 'bf_detail', 'bf_sub_detail', 'bf_tree_choice', 'bf_is_senior', 'bf_auto_via']) {
+            const v = autoUsp.get(k);
+            if (v) autoParams[k] = v;
+          }
+          (async () => {
+            const t0 = Date.now();
+            let ready = false;
+            while (Date.now() - t0 < 20000) {
+              try {
+                if (document.querySelector('.i-lucide-pen-line, span[class*="pen-line"], button[title*="New Conversation" i], button[aria-label*="New Conversation" i]')) { ready = true; break; }
+              } catch (e) {}
+              await new Promise(r => setTimeout(r, 500));
+            }
+            if (!ready) { showToast('Kairos app did not finish loading — press Create Ticket manually.', 'error'); return; }
+            try { await openTicketPage(autoBtn, 'Normal Ticket', autoParams); } catch (e) { showToast('Auto ticket failed: ' + (e && e.message), 'error'); }
+          })();
+        }
+      }
+    } catch (e) {}
     // Update check: once shortly after load, then every 30 min (silent unless newer found).
     // Guarded — ensureButtons can re-run after a tool reset.
     try {
@@ -12069,7 +12114,7 @@ Have a good day.`
       showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
       return false;
     }
-    const url = KAIROS_TICKETS_URL + '?bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
+    const url = KAIROS_TICKETS_URL + '?bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone) + '&bf_autostart=1';
     try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
     if (btnEl) {
       btnEl.textContent = '✓ Opened';
