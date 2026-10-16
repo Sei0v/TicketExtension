@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v2.1] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v2.2] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2615,7 +2615,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '2.1';
+    const TOOL_VERSION = '2.2';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -5608,8 +5608,14 @@
       setTimeout(() => btnEl.textContent = origText, 2000);
     };
 
-    seniorBtn.addEventListener('click', () => openTicketPage(seniorBtn, 'Senior Ticket'));
-    createBtnEl.addEventListener('click', () => openTicketPage(createBtnEl, 'Normal Ticket'));
+    seniorBtn.addEventListener('click', () => {
+      if (isFoodRms) { rmsTicketHandoff(seniorBtn); return; }
+      openTicketPage(seniorBtn, 'Senior Ticket');
+    });
+    createBtnEl.addEventListener('click', () => {
+      if (isFoodRms) { rmsTicketHandoff(createBtnEl); return; }
+      openTicketPage(createBtnEl, 'Normal Ticket');
+    });
 
     function findOrderLink() {
       // NOTE: the WP post ID is custom (NOT derivable from the order number),
@@ -5996,6 +6002,13 @@
                 if (phone) break;
               }
             }
+          } catch (e) {}
+        }
+        // RMS fallback: phone comes from the order-details Customer Info card.
+        if (!phone && isFoodRms) {
+          try {
+            const rd = extractRmsOrderDetails().phone || '';
+            phone = (typeof formatPhoneForKairos === 'function' && formatPhoneForKairos(rd)) || rd;
           } catch (e) {}
         }
         if (!phone) {
@@ -11460,7 +11473,7 @@ Have a good day.`
     container.appendChild(createSectionDivider());
 
     // Section 2: Customer & Operations (Calm Teal: RMS -> SMS -> Chat -> System)
-    container.appendChild(rmsBtn);
+    if (!isFoodRms) container.appendChild(rmsBtn);
     container.appendChild(smsBtn);
     container.appendChild(chatBtn);
     container.appendChild(systemWrapper);
@@ -11472,6 +11485,15 @@ Have a good day.`
     container.appendChild(calcBtn);
     container.appendChild(emailBtn);
     container.appendChild(sheetsWrapper);
+
+    // RMS order-details handoff (details pages only): Ticket button opens
+    // Kairos customer search carrying order # + phone.
+    if (isFoodRms && window.location.pathname.includes('/orders/details/')) {
+      const rmsTicketBtn = createBtn('btn-rms-ticket', '🎫 Ticket', '#0d9488');
+      rmsTicketBtn.title = 'Open customer in Kairos with this order + phone';
+      rmsTicketBtn.addEventListener('click', () => rmsTicketHandoff(rmsTicketBtn));
+      container.appendChild(rmsTicketBtn);
+    }
 
     document.body.appendChild(container);
     document.body.appendChild(dockTab);
@@ -11807,8 +11829,8 @@ Have a good day.`
   // =========================================================================
   // Freshdesk Logic
   // =========================================================================
-  // Mount toolbar on Freshdesk and Kairos (AUTO-SHUTDOWN once mounted to ensure 0% CPU lag)
-  if (window.location.host.includes('freshdesk') || isKairos) {
+  // Mount toolbar on Freshdesk, Kairos and RMS (AUTO-SHUTDOWN once mounted to ensure 0% CPU lag)
+  if (window.location.host.includes('freshdesk') || isKairos || isFoodRms) {
     let mountIv = null;
     let observer = null;
 
@@ -11916,20 +11938,8 @@ Have a good day.`
   // Breadfast Food RMS Automation: Auto-open Order Details from List
   // =========================================================================
   if (isFoodRms) {
-    // Order details page (/orders/details/...): mount the ticket-handoff button.
-    // Svelte renders async — poll until order # + phone are readable, then mount.
+    // Order details pages use the toolbar Ticket button (mounted below).
     if (window.location.pathname.includes('/orders/details/')) {
-      let rmsBtnTries = 0;
-      const rmsBtnIv = setInterval(() => {
-        rmsBtnTries++;
-        try {
-          const d = extractRmsOrderDetails();
-          if ((d.orderNumber && d.phone) || rmsBtnTries > 40) {
-            clearInterval(rmsBtnIv);
-            if (d.orderNumber && d.phone) injectRmsTicketButton();
-          }
-        } catch (e) { if (rmsBtnTries > 40) clearInterval(rmsBtnIv); }
-      }, 500);
       return;
     }
 
@@ -12064,7 +12074,7 @@ Have a good day.`
   // customer phone (Customer Info card) and opens Kairos customer search in a
   // new tab carrying bf_order_number + bf_phone.
   // =========================================================================
-  const extractRmsOrderDetails = () => {
+  function extractRmsOrderDetails() {
     let orderNumber = '';
     let phone = '';
     try {
@@ -12084,7 +12094,29 @@ Have a good day.`
       }
     } catch (e) {}
     return { orderNumber, phone: (phone || '').replace(/\D/g, '') };
-  };
+  }
+
+  // Shared RMS → Kairos handoff: validate RMS data, open Kairos in a new tab.
+  function rmsTicketHandoff(btnEl) {
+    const origText = btnEl ? btnEl.textContent : '';
+    const d = extractRmsOrderDetails();
+    const orderOk = d.orderNumber && (typeof isValidOrderNumber === 'function' ? isValidOrderNumber(d.orderNumber) : /^\d{4}-\d{5,14}$/.test(d.orderNumber));
+    if (!orderOk) {
+      showToast('Could not find the order number on this RMS page yet — wait for it to load and retry.', 'error');
+      return false;
+    }
+    if (!d.phone || d.phone.length < 11) {
+      showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
+      return false;
+    }
+    const url = 'https://kairos.breadfast.com/app/accounts/1/search?q=' + encodeURIComponent(d.phone) + '&bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
+    try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
+    if (btnEl) {
+      btnEl.textContent = '✓ Opened';
+      setTimeout(() => { try { btnEl.textContent = origText; } catch (e) {} }, 2000);
+    }
+    return true;
+  }
 
   function fallbackCopy(txt, done) {
     try {
@@ -12098,34 +12130,6 @@ Have a good day.`
       if (done) done();
     } catch (e) {}
   }
-
-  const injectRmsTicketButton = () => {
-    if (document.getElementById('bf-rms-ticket-btn')) return;
-    if (!document.body) return;
-    const btn = document.createElement('button');
-    btn.id = 'bf-rms-ticket-btn';
-    btn.setAttribute('type', 'button');
-    btn.textContent = '🎫 Ticket';
-    btn.title = 'Open customer in Kairos with this order + phone';
-    btn.style.cssText = 'position:fixed!important;left:20px!important;bottom:20px!important;z-index:2147483645!important;background:#0d9488!important;color:#fff!important;border:none!important;border-radius:8px!important;padding:10px 16px!important;font-size:13px!important;font-weight:bold!important;cursor:pointer!important;box-shadow:0 4px 14px rgba(0,0,0,.4)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;';
-    btn.addEventListener('click', () => {
-      const d = extractRmsOrderDetails();
-      const orderOk = d.orderNumber && (typeof isValidOrderNumber === 'function' ? isValidOrderNumber(d.orderNumber) : /^\d{4}-\d{5,14}$/.test(d.orderNumber));
-      if (!orderOk) {
-        showToast('Could not find the order number on this RMS page yet — wait for it to load and retry.', 'error');
-        return;
-      }
-      if (!d.phone || d.phone.length < 11) {
-        showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
-        return;
-      }
-      const url = 'https://kairos.breadfast.com/app/accounts/1/search?q=' + encodeURIComponent(d.phone) + '&bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone);
-      try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
-      btn.textContent = '✓ Opened';
-      setTimeout(() => { try { btn.textContent = '🎫 Ticket'; } catch (e) {} }, 2000);
-    });
-    document.body.appendChild(btn);
-  };
 
   // Kairos-side receiver: floating handoff card when opened from RMS.
   if (isKairos) {
