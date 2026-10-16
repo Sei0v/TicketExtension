@@ -12,7 +12,7 @@
   if (!isFreshdesk && !isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v2.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v2.3] Script active on host:', window.location.host);
 
   function showToast(message, type = 'info') {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
@@ -2615,7 +2615,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '2.2';
+    const TOOL_VERSION = '2.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11464,26 +11464,26 @@ Have a good day.`
       return div;
     };
 
-    // Section 1: Ticket Actions (Calm Blue)
-    container.appendChild(seniorBtn);
+    // Section 1: Ticket Actions (Calm Blue) — on RMS only Create + Tree.
+    if (!isFoodRms) container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
     container.appendChild(treeWrapper);
-    container.appendChild(autoFillWrapper);
+    if (!isFoodRms) container.appendChild(autoFillWrapper);
 
     container.appendChild(createSectionDivider());
 
     // Section 2: Customer & Operations (Calm Teal: RMS -> SMS -> Chat -> System)
     if (!isFoodRms) container.appendChild(rmsBtn);
-    container.appendChild(smsBtn);
+    if (!isFoodRms) container.appendChild(smsBtn);
     container.appendChild(chatBtn);
     container.appendChild(systemWrapper);
 
     container.appendChild(createSectionDivider());
 
-    // Section 3: Tools & Utilities (Calm Violet)
-    container.appendChild(delayBtn);
+    // Section 3: Tools & Utilities (Calm Violet) — on RMS only Calculator + Sheets.
+    if (!isFoodRms) container.appendChild(delayBtn);
     container.appendChild(calcBtn);
-    container.appendChild(emailBtn);
+    if (!isFoodRms) container.appendChild(emailBtn);
     container.appendChild(sheetsWrapper);
 
     // RMS order-details handoff (details pages only): Ticket button opens
