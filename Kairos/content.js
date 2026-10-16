@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v3.8] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v3.9] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2619,7 +2619,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '3.8';
+    const TOOL_VERSION = '3.9';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4621,18 +4621,42 @@
             // Committed state: phone appears as TEXT (input gone) with a remove (x) button.
             // Strict phone-digits match only — loose matches caused false positives.
             const isCustomerSelected = () => {
-              const form = composeForm();
-              const contactField = form?.querySelector('[data-field="contact"]') ||
-                document.querySelector('[data-testid="compose-header"] [data-field="contact"]');
-              if (!contactField) return false;
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
               if (cleanP.length < 8) return false;
-              const hasInput = !!contactField.querySelector('input');
-              const fieldDigits = (contactField.textContent || '').replace(/[^0-9]/g, '');
-              if (!fieldDigits.includes(cleanP)) return false;
-              if (!hasInput) return true;
-              const hasX = !!contactField.querySelector('svg.lucide-x, [class*="i-lucide-x"], button[class*="flex-shrink"], [class*="chip"]');
-              return hasX;
+              // 1) Precise: contact field via compose testids (ticket page).
+              try {
+                const form = composeForm();
+                const contactField = form?.querySelector('[data-field="contact"]') ||
+                  document.querySelector('[data-testid="compose-header"] [data-field="contact"]');
+                if (contactField) {
+                  const hasInput = !!contactField.querySelector('input');
+                  const fieldDigits = (contactField.textContent || '').replace(/[^0-9]/g, '');
+                  if (fieldDigits.includes(cleanP)) {
+                    if (!hasInput) return true;
+                    if (contactField.querySelector('svg.lucide-x, [class*="i-lucide-x"], button[class*="flex-shrink"], [class*="chip"]')) return true;
+                  }
+                }
+              } catch (e) {}
+              // 2) Fallback (conversations modal has no compose testids): climb
+              // from the To input itself to the field container holding the chip.
+              // Guards: skip levels holding the open results list (their digits
+              // are not a committed chip), cap the climb so modal chrome
+              // (e.g. its own close X) can't fake a match.
+              try {
+                if (toInput && document.body.contains(toInput)) {
+                  let p = toInput.parentElement;
+                  for (let d = 0; d < 4 && p && p !== document.body; d++) {
+                    if (p.querySelector('[role="option"], [role="listbox"]')) { p = p.parentElement; continue; }
+                    const t = (p.textContent || '');
+                    if (t.replace(/[^0-9]/g, '').includes(cleanP)) {
+                      if (!p.querySelector('input')) return true;
+                      if (p.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]')) return true;
+                    }
+                    p = p.parentElement;
+                  }
+                }
+              } catch (e) {}
+              return false;
             };
 
             // Step 7: Wait for search result dropdown from Kairos server and click Customer
