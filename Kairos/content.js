@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.1.6] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1.7] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2721,7 +2721,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.6';
+    const TOOL_VERSION = '5.1.7';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3067,9 +3067,71 @@
       return btn;
     };
 
+    // === Artistic button scenes (experimental, applied to ONE button) ======
+    // Tiny inline SVG backgrounds (data-URIs) — rendered once as static
+    // images: no network, no animation, no observers. Pure decoration.
+    const BTN_SCENES = {
+      water: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
+        <defs><linearGradient id='w' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#7dd3fc'/><stop offset='1' stop-color='#0369a1'/>
+        </linearGradient></defs>
+        <rect width='72' height='40' fill='url(#w)'/>
+        <path d='M0 24 Q18 19 36 24 T72 24 V40 H0 Z' fill='#38bdf8' opacity='.65'/>
+        <path d='M0 30 Q18 25 36 30 T72 30 V40 H0 Z' fill='#0284c7' opacity='.6'/>
+        <circle cx='12' cy='10' r='5' fill='#fef9c3' opacity='.9'/></svg>`,
+      sun: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
+        <defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#93c5fd'/><stop offset='1' stop-color='#fde68a'/>
+        </linearGradient></defs>
+        <rect width='72' height='40' fill='url(#s)'/>
+        <circle cx='54' cy='13' r='9' fill='#f59e0b'/>
+        <circle cx='54' cy='13' r='12' fill='#f59e0b' opacity='.35'/>
+        <rect y='30' width='72' height='10' fill='#a3e635' opacity='.8'/></svg>`,
+      tree: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
+        <defs><linearGradient id='t' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#bae6fd'/><stop offset='1' stop-color='#e0f2fe'/>
+        </linearGradient></defs>
+        <rect width='72' height='40' fill='url(#t)'/>
+        <rect y='30' width='72' height='10' fill='#65a30d'/>
+        <rect x='34' y='20' width='4' height='11' fill='#92400e'/>
+        <circle cx='36' cy='16' r='9' fill='#16a34a'/>
+        <circle cx='28' cy='20' r='6' fill='#22c55e'/>
+        <circle cx='44' cy='20' r='6' fill='#22c55e'/></svg>`,
+      flower: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
+        <defs><linearGradient id='f' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#fecdd3'/><stop offset='1' stop-color='#f9a8d4'/>
+        </linearGradient></defs>
+        <rect width='72' height='40' fill='url(#f)'/>
+        <g fill='#fff'><circle cx='16' cy='16' r='2.4'/><circle cx='13' cy='13' r='2.4'/><circle cx='19' cy='13' r='2.4'/><circle cx='13' cy='19' r='2.4'/><circle cx='19' cy='19' r='2.4'/></g>
+        <circle cx='16' cy='16' r='2' fill='#facc15'/>
+        <g fill='#fff'><circle cx='40' cy='24' r='2.4'/><circle cx='37' cy='21' r='2.4'/><circle cx='43' cy='21' r='2.4'/><circle cx='37' cy='27' r='2.4'/><circle cx='43' cy='27' r='2.4'/></g>
+        <circle cx='40' cy='24' r='2' fill='#facc15'/></svg>`,
+      night: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
+        <defs><linearGradient id='n' x1='0' y1='0' x2='0' y2='1'>
+        <stop offset='0' stop-color='#1e1b4b'/><stop offset='1' stop-color='#312e81'/>
+        </linearGradient></defs>
+        <rect width='72' height='40' fill='url(#n)'/>
+        <circle cx='54' cy='12' r='7' fill='#fde68a'/><circle cx='50' cy='10' r='6' fill='#312e81'/>
+        <g fill='#fff'><circle cx='12' cy='10' r='1'/><circle cx='24' cy='18' r='1'/><circle cx='40' cy='8' r='1'/><circle cx='60' cy='26' r='1'/><circle cx='18' cy='28' r='1'/></g></svg>`
+    };
+    const paintBtnScene = (btn, name) => {
+      const svg = BTN_SCENES[name];
+      if (!svg || !btn) return;
+      try {
+        btn.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+        btn.style.backgroundSize = 'cover';
+        btn.style.backgroundPosition = 'center';
+        btn.style.textShadow = '0 1px 2px rgba(0,0,0,0.65)';
+      } catch (e) {}
+    };
+
     // Section 1: Ticket Actions (Calm Blue)
     const seniorBtn = createBtn('btn-senior-ticket', 'Senior Ticket', '#2563eb');
     const createBtnEl = createBtn('btn-create-ticket', isKairos ? 'Create Ticket' : 'Normal Ticket', '#2563eb');
+    // EXPERIMENT: paint ONE button with an artistic scene (swap the name to
+    // try: water | sun | tree | flower | night). Set to null to go back flat.
+    const TEST_BTN_SCENE = 'tree';
+    if (TEST_BTN_SCENE) paintBtnScene(createBtnEl, TEST_BTN_SCENE);
 
     // Section 2: Customer & Operations (Calm Teal)
     const rmsBtn = createBtn('btn-rms-order', 'RMS', '#0d9488');

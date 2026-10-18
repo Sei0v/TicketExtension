@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Kairos Tool",
-  "version": "5.1.6",
+  "version": "5.1.7",
   "description": "Kairos Standalone Tool - Toolbar with Chat, SMS, System, Calculator, Email and configurable action buttons.",
   "permissions": [
     "activeTab",
