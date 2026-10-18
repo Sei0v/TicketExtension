@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.1.5] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1.6] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2183,12 +2183,32 @@
       } catch (e) {}
       return 'ocean';
     };
+    // Artistic button fill: derive a soft vertical gradient (top highlight,
+    // bottom shade) from a single role color. Pure CSS background — computed
+    // once per recolor, no animation or observers, so it costs nothing.
+    const shadeColor = (hex, pct) => {
+      try {
+        let c = (hex || '').replace('#', '');
+        if (c.length === 3) c = c.split('').map(x => x + x).join('');
+        const num = parseInt(c, 16);
+        let r = (num >> 16) & 255, g = (num >> 8) & 255, b = num & 255;
+        r = Math.round(Math.min(255, Math.max(0, r + 255 * pct)));
+        g = Math.round(Math.min(255, Math.max(0, g + 255 * pct)));
+        b = Math.round(Math.min(255, Math.max(0, b + 255 * pct)));
+        return `rgb(${r}, ${g}, ${b})`;
+      } catch (e) { return hex; }
+    };
+    const btnGradient = (hex) =>
+      `linear-gradient(180deg, ${shadeColor(hex, 0.14)} 0%, ${hex} 52%, ${shadeColor(hex, -0.14)} 100%)`;
     const applyColorTheme = (name) => {
       const th = COLOR_THEMES[name] || COLOR_THEMES.ocean;
       try {
         container.querySelectorAll('button[data-role]').forEach(b => {
           const r = b.dataset.role;
-          if (r && th[r]) b.style.backgroundColor = th[r];
+          if (r && th[r]) {
+            b.style.backgroundColor = th[r];
+            b.style.backgroundImage = btnGradient(th[r]);
+          }
         });
       } catch (e) {}
     };
@@ -2701,7 +2721,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.5';
+    const TOOL_VERSION = '5.1.6';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3021,19 +3041,26 @@
       } catch (e) {}
       btn.style.padding = '5px 4px';
       btn.style.border = 'none';
-      btn.style.borderRadius = '6px';
+      btn.style.borderRadius = '8px';
       btn.style.backgroundColor = color;
+      btn.style.backgroundImage = btnGradient(color);
       btn.style.color = '#fff';
       btn.style.fontSize = '11px';
       btn.style.fontWeight = 'bold';
       btn.style.cursor = 'pointer';
-      btn.style.boxShadow = '0 2px 4px rgba(0,0,0,0.15)';
-      btn.style.transition = 'transform 0.1s, filter 0.2s';
+      btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.28), 0 3px 6px rgba(0,0,0,0.22)';
+      btn.style.transition = 'transform 0.1s, filter 0.2s, box-shadow 0.2s';
       btn.style.lineHeight = '1.3';
       btn.style.whiteSpace = 'nowrap';
 
-      btn.addEventListener('mouseenter', () => btn.style.filter = 'brightness(0.92)');
-      btn.addEventListener('mouseleave', () => btn.style.filter = 'brightness(1)');
+      btn.addEventListener('mouseenter', () => {
+        btn.style.filter = 'brightness(1.06)';
+        btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 10px rgba(0,0,0,0.28)';
+      });
+      btn.addEventListener('mouseleave', () => {
+        btn.style.filter = 'brightness(1)';
+        btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.28), 0 3px 6px rgba(0,0,0,0.22)';
+      });
       btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.96)');
       btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1)');
 
@@ -11670,7 +11697,7 @@ Have a good day.`
 
     // Switcher button (RMS only): search customer phone in Switcher
     if (isFoodRms) {
-      const switcherBtn = createBtn('btn-switcher-search', 'Switcher', '#f59e0b');
+      const switcherBtn = createBtn('btn-switcher-search', 'Switcher', '#0d9488');
       switcherBtn.title = 'Search customer phone in Switcher';
       switcherBtn.addEventListener('click', () => {
         const d = extractRmsOrderDetails();
