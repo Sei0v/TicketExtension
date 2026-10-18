@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.5] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.6] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -57,11 +57,12 @@
   // branch returns early — anything defined after it would stay uninitialized.
   const KAIROS_TICKETS_URL = 'https://kairos.breadfast.com/app/accounts/1/tickets/breached_slas/mine/conversations';
 
-  function showToast(message, type = 'info') {
+  function showToast(message, type = 'info', force = false) {
     // Quiet mode: errors only. Success/info toasts stacked up and spammed
-    // the screen, so they are dropped here. The version pill still signals
-    // updates by turning blue — no toast needed for that.
-    if (type !== 'error') return;
+    // the screen, so they are dropped here. Pass force=true for feedback the
+    // user explicitly asked for (update button, delay calc, settings save) —
+    // those render in a neutral dark toast instead of being swallowed.
+    if (type !== 'error' && !force) return;
     if (!document.body) return;
     const toast = document.createElement('div');
     toast.textContent = message;
@@ -2887,7 +2888,7 @@
           saveBtnScenes(sceneMap);
           applyAllBtnScenes();
         } catch (e) {}
-        showToast(`Settings saved (Team: ${v}).`, 'success');
+        showToast(`Settings saved (Team: ${v}).`, 'success', true);
       });
       footer.appendChild(saveBtn);
       panel.appendChild(title);
@@ -2905,7 +2906,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.5';
+    const TOOL_VERSION = '5.2.6';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -2947,11 +2948,11 @@
         if (cmpVersions(remote, TOOL_VERSION) > 0) {
           latestKnownVersion = remote;
           paintVersionPill();
-          showToast(`Update v${remote} found — click the version pill again to download it.`, 'info');
+          showToast(`Update v${remote} found — click the version pill again to download it.`, 'info', true);
         } else {
           latestKnownVersion = '';
           paintVersionPill();
-          if (!silent) showToast(`You're on the latest version (v${TOOL_VERSION}).`, 'success');
+          if (!silent) showToast(`You're on the latest version (v${TOOL_VERSION}).`, 'success', true);
         }
       } catch (e) {
         if (!silent) showToast('Update check failed (offline?).', 'error');
@@ -2982,10 +2983,10 @@
       // gesture, so no popup blocker). Otherwise run a fresh check first.
       if (latestKnownVersion && cmpVersions(latestKnownVersion, TOOL_VERSION) > 0) {
         try { window.open(DOWNLOAD_ZIP_URL, '_blank', 'noopener,noreferrer'); } catch (err) {}
-        showToast(`Downloading v${latestKnownVersion} — extract over E:\\Kairos\\Kairos, then reload extension + F5.`, 'info');
+        showToast(`Downloading v${latestKnownVersion} — extract over E:\\Kairos\\Kairos, then reload extension + F5.`, 'info', true);
         checkToolUpdate(true);
       } else {
-        showToast('Checking for updates...', 'info');
+        showToast('Checking for updates...', 'info', true);
         checkToolUpdate(false);
       }
     });
@@ -6484,14 +6485,13 @@
           }
 
           const { diff, promisedTime, completedTime } = response;
-          // All three results use 'error' type on purpose: quiet mode drops
-          // info/success toasts, and the delay result is explicitly requested.
+          // Explicitly requested result → force past quiet mode (neutral toast).
           if (diff > 0) {
-            showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
+            showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info', true);
           } else if (diff < 0) {
-            showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
+            showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info', true);
           } else {
-            showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
+            showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info', true);
           }
         });
       } catch (e) {
