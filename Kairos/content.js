@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.5] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2905,7 +2905,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.4';
+    const TOOL_VERSION = '5.2.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -6425,10 +6425,14 @@
       const orderLink = findOrderLink();
 
       let isFinished = false;
+      // Declared BEFORE finish() so the early-exit paths (no order link) can
+      // call finish() without hitting a temporal-dead-zone crash that skipped
+      // both the toast and the button reset.
+      let safetyTimer = null;
       const finish = () => {
         if (isFinished) return;
         isFinished = true;
-        clearTimeout(safetyTimer);
+        if (safetyTimer) clearTimeout(safetyTimer);
         btnEl.textContent = origText;
         btnEl.style.pointerEvents = 'auto';
         btnEl.dataset.loading = 'false';
@@ -6444,7 +6448,7 @@
       btnEl.style.pointerEvents = 'none';
 
       // Safety timeout: reset button if background hangs
-      const safetyTimer = setTimeout(() => {
+      safetyTimer = setTimeout(() => {
         if (!isFinished) {
           finish();
           showToast('Calculation timed out. Please retry.', 'error');
@@ -6480,12 +6484,14 @@
           }
 
           const { diff, promisedTime, completedTime } = response;
+          // All three results use 'error' type on purpose: quiet mode drops
+          // info/success toasts, and the delay result is explicitly requested.
           if (diff > 0) {
             showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
           } else if (diff < 0) {
-            showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
+            showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
           } else {
-            showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info');
+            showToast(`On time! (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
           }
         });
       } catch (e) {
