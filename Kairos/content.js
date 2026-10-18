@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.1] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2639,9 +2639,10 @@
       }
       panel = document.createElement('div');
       panel.id = 'bf-settings-panel';
-      panel.style.cssText = 'position:fixed!important;bottom:120px!important;right:28px!important;z-index:2147483647!important;background:#111827!important;color:#fff!important;border:1px solid #374151!important;border-radius:10px!important;padding:14px!important;width:250px!important;box-shadow:0 6px 20px rgba(0,0,0,.5)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;';
+      panel.style.cssText = 'position:fixed!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;z-index:2147483647!important;background:#111827!important;color:#fff!important;border:1px solid #374151!important;border-radius:12px!important;padding:0!important;width:322px!important;max-height:82vh!important;overflow:hidden!important;box-shadow:0 12px 44px rgba(0,0,0,.6)!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif!important;display:flex!important;flex-direction:column!important;';
+      // ---- Title bar (draggable) ----
       const title = document.createElement('div');
-      title.style.cssText = 'display:flex!important;align-items:center!important;justify-content:space-between!important;font-weight:bold!important;font-size:13px!important;margin-bottom:10px!important;cursor:move!important;user-select:none!important;';
+      title.style.cssText = 'display:flex!important;align-items:center!important;justify-content:space-between!important;font-weight:bold!important;font-size:13px!important;padding:10px 12px!important;cursor:move!important;user-select:none!important;border-bottom:1px solid #1f2937!important;flex:0 0 auto!important;';
       const titleTxt = document.createElement('span');
       titleTxt.textContent = 'Tool Settings';
       title.appendChild(titleTxt);
@@ -2655,7 +2656,6 @@
       closeX.addEventListener('mousedown', (e) => { e.stopPropagation(); });
       closeX.addEventListener('click', (e) => { e.stopPropagation(); panel.style.display = 'none'; });
       title.appendChild(closeX);
-      // Draggable settings panel (drag by the title bar).
       title.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -2663,6 +2663,7 @@
         try {
           panel.style.left = r.left + 'px';
           panel.style.top = r.top + 'px';
+          panel.style.setProperty('transform', 'none', 'important');
           panel.style.setProperty('right', 'auto', 'important');
           panel.style.setProperty('bottom', 'auto', 'important');
         } catch (err) {}
@@ -2682,90 +2683,86 @@
         document.addEventListener('mousemove', mv);
         document.addEventListener('mouseup', up);
       });
-      const teamLbl = document.createElement('div');
-      teamLbl.textContent = 'Default Team';
-      teamLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
-      const teamInput = document.createElement('select');
-      teamInput.id = 'bf-settings-team-input';
-      const TEAM_OPTIONS = ['cx restaurant support', 'cx riders support', 'cx rating restaurant', 'cx retention restaurant'];
-      let curTeam = 'cx restaurant support';
-      try { curTeam = getDefaultTeam(); } catch (e) {}
-      TEAM_OPTIONS.forEach(opt => {
-        const o = document.createElement('option');
-        o.value = opt;
-        o.textContent = opt;
-        if (opt === curTeam) o.selected = true;
-        teamInput.appendChild(o);
-      });
-      teamInput.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
-      const layoutLbl = document.createElement('div');
-      layoutLbl.textContent = 'Toolbar layout';
-      layoutLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
-      const layoutSelect = document.createElement('select');
-      layoutSelect.id = 'bf-settings-layout-input';
-      Object.keys(TOOLBAR_LAYOUTS).forEach(key => {
-        const o = document.createElement('option');
-        o.value = key;
-        o.textContent = TOOLBAR_LAYOUTS[key];
-        if (key === getToolbarLayout()) o.selected = true;
-        layoutSelect.appendChild(o);
-      });
-      layoutSelect.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
-      const dockLbl = document.createElement('div');
-      dockLbl.textContent = 'Toolbar dock (taskbar)';
-      dockLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
-      const dockSelect = document.createElement('select');
-      dockSelect.id = 'bf-settings-dock-input';
-      Object.keys(DOCK_MODES).forEach(key => {
-        const o = document.createElement('option');
-        o.value = key;
-        o.textContent = DOCK_MODES[key];
-        if (key === getDockMode()) o.selected = true;
-        dockSelect.appendChild(o);
-      });
-      dockSelect.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
-      const colorLbl = document.createElement('div');
-      colorLbl.textContent = 'Button colors';
-      colorLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
-      const colorSelect = document.createElement('select');
-      colorSelect.id = 'bf-settings-colors-input';
-      Object.keys(COLOR_THEMES).forEach(key => {
-        const o = document.createElement('option');
-        o.value = key;
-        o.textContent = COLOR_THEMES[key].label;
-        if (key === getColorTheme()) o.selected = true;
-        colorSelect.appendChild(o);
-      });
-      colorSelect.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
-      // Button art themes — one dropdown per button (live preview on change).
-      const artLbl = document.createElement('div');
-      artLbl.textContent = 'Button art (per button)';
-      artLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin:2px 0 6px!important;';
-      const artRows = [];
-      const curScenes = getBtnScenes();
-      BUTTON_THEME_TARGETS.forEach(t => {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:6px!important;';
-        const lab = document.createElement('div');
-        lab.textContent = t.label;
-        lab.style.cssText = 'flex:0 0 84px!important;font-size:11px!important;opacity:.85!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;';
-        const sel = document.createElement('select');
-        Object.keys(SCENE_LABELS).forEach(key => {
+      // ---- Tab bar: General | Styles ----
+      const tabBar = document.createElement('div');
+      tabBar.style.cssText = 'display:flex!important;gap:4px!important;padding:8px 12px 0!important;flex:0 0 auto!important;';
+      const tabBase = 'flex:1!important;background:transparent!important;border:none!important;border-bottom:2px solid transparent!important;padding:6px 4px!important;font-size:12px!important;font-weight:bold!important;cursor:pointer!important;transition:color .15s!important;';
+      const mkTab = (label) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = label;
+        b.style.cssText = tabBase;
+        return b;
+      };
+      const setTabActive = (btn, active) => {
+        try {
+          btn.style.setProperty('border-bottom-color', active ? '#2563eb' : 'transparent', 'important');
+          btn.style.setProperty('color', active ? '#fff' : '#9ca3af', 'important');
+        } catch (e) {}
+      };
+      const tabGeneral = mkTab('⚙️ General');
+      const tabStyles = mkTab('🎨 Styles');
+      tabBar.appendChild(tabGeneral);
+      tabBar.appendChild(tabStyles);
+      // ---- Scrollable body with two panes ----
+      const body = document.createElement('div');
+      body.style.cssText = 'overflow-y:auto!important;padding:12px!important;flex:1 1 auto!important;min-height:0!important;';
+      const genPane = document.createElement('div');
+      const styPane = document.createElement('div');
+      styPane.style.display = 'none';
+      body.appendChild(genPane);
+      body.appendChild(styPane);
+      const activateTab = (which) => {
+        const isGen = which === 'general';
+        genPane.style.display = isGen ? 'block' : 'none';
+        styPane.style.display = isGen ? 'none' : 'block';
+        setTabActive(tabGeneral, isGen);
+        setTabActive(tabStyles, !isGen);
+      };
+      tabGeneral.addEventListener('click', () => activateTab('general'));
+      tabStyles.addEventListener('click', () => activateTab('styles'));
+      // ---- Field helpers ----
+      const styleSelect = (sel) => {
+        sel.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
+      };
+      const mkSelect = (id) => {
+        const s = document.createElement('select');
+        if (id) s.id = id;
+        styleSelect(s);
+        return s;
+      };
+      const addField = (parent, labelText, selectEl) => {
+        const lbl = document.createElement('div');
+        lbl.textContent = labelText;
+        lbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
+        parent.appendChild(lbl);
+        parent.appendChild(selectEl);
+      };
+      const addOptions = (sel, keys, getLabel, curVal) => {
+        keys.forEach(key => {
           const o = document.createElement('option');
           o.value = key;
-          o.textContent = SCENE_LABELS[key];
-          if (key === (curScenes[t.id] || 'gradient')) o.selected = true;
+          o.textContent = getLabel(key);
+          if (key === curVal) o.selected = true;
           sel.appendChild(o);
         });
-        sel.style.cssText = 'flex:1!important;min-width:0!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:4px 6px!important;font-size:11px!important;';
-        sel.addEventListener('change', () => {
-          try { paintBtnSceneEl(document.getElementById(t.id), sel.value === 'gradient' ? null : sel.value); } catch (e) {}
-        });
-        row.appendChild(lab);
-        row.appendChild(sel);
-        artRows.push({ id: t.id, sel });
-        artLbl.appendChild(row); // temp holder; re-parented below in order
-      });
+      };
+      // ---- General tab controls ----
+      const TEAM_OPTIONS = ['cx restaurant support', 'cx riders support', 'cx rating restaurant', 'cx retention restaurant'];
+      const teamInput = mkSelect('bf-settings-team-input');
+      let curTeam = 'cx restaurant support';
+      try { curTeam = getDefaultTeam(); } catch (e) {}
+      addOptions(teamInput, TEAM_OPTIONS, k => k, curTeam);
+      addField(genPane, 'Default Team', teamInput);
+      const layoutSelect = mkSelect('bf-settings-layout-input');
+      addOptions(layoutSelect, Object.keys(TOOLBAR_LAYOUTS), k => TOOLBAR_LAYOUTS[k], getToolbarLayout());
+      addField(genPane, 'Toolbar layout', layoutSelect);
+      const dockSelect = mkSelect('bf-settings-dock-input');
+      addOptions(dockSelect, Object.keys(DOCK_MODES), k => DOCK_MODES[k], getDockMode());
+      addField(genPane, 'Toolbar dock (taskbar)', dockSelect);
+      const colorSelect = mkSelect('bf-settings-colors-input');
+      addOptions(colorSelect, Object.keys(COLOR_THEMES), k => COLOR_THEMES[k].label, getColorTheme());
+      addField(genPane, 'Button colors', colorSelect);
       const scaleLbl = document.createElement('div');
       scaleLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
       const scaleValSpan = document.createElement('span');
@@ -2787,6 +2784,8 @@
           applyToolbarScale(scaleInput.value);
         } catch (e) {}
       });
+      genPane.appendChild(scaleLbl);
+      genPane.appendChild(scaleInput);
       const lockLbl = document.createElement('label');
       lockLbl.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;font-size:12px!important;margin-bottom:10px!important;cursor:pointer!important;';
       const lockCheck = document.createElement('input');
@@ -2795,20 +2794,49 @@
       lockCheck.checked = isToolbarLocked();
       lockLbl.appendChild(lockCheck);
       lockLbl.appendChild(document.createTextNode('Lock toolbar position 🔒'));
+      genPane.appendChild(lockLbl);
       const resetPosBtn = document.createElement('button');
       resetPosBtn.type = 'button';
       resetPosBtn.textContent = 'Reset toolbar position ↩';
-      resetPosBtn.style.cssText = 'width:100%!important;background:#4b5563!important;color:#fff!important;border:none!important;border-radius:6px!important;padding:7px!important;font-size:12px!important;font-weight:bold!important;cursor:pointer!important;margin-bottom:8px!important;';
+      resetPosBtn.style.cssText = 'width:100%!important;background:#4b5563!important;color:#fff!important;border:none!important;border-radius:6px!important;padding:7px!important;font-size:12px!important;font-weight:bold!important;cursor:pointer!important;';
       resetPosBtn.addEventListener('click', () => {
         try { localStorage.removeItem('bf_toolbar_pos'); } catch (e) {}
         try { localStorage.setItem('bf_toolbar_dock', 'floating'); } catch (e) {}
-        try { if (typeof dockSelect !== 'undefined' && dockSelect) dockSelect.value = 'floating'; } catch (e) {}
+        try { dockSelect.value = 'floating'; } catch (e) {}
         try { applyDockMode('floating'); } catch (e) {}
         showToast('Toolbar reset to default (floating corner).', 'info');
       });
+      genPane.appendChild(resetPosBtn);
+      // ---- Styles tab controls (Button art, one dropdown per button) ----
+      const artNote = document.createElement('div');
+      artNote.textContent = 'Pick a scene for any button. "Gradient" = plain color.';
+      artNote.style.cssText = 'font-size:11px!important;opacity:.7!important;margin-bottom:10px!important;line-height:1.4!important;';
+      styPane.appendChild(artNote);
+      const artRows = [];
+      const curScenes = getBtnScenes();
+      BUTTON_THEME_TARGETS.forEach(t => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex!important;align-items:center!important;gap:8px!important;margin-bottom:8px!important;';
+        const lab = document.createElement('div');
+        lab.textContent = t.label;
+        lab.style.cssText = 'flex:0 0 92px!important;font-size:11px!important;opacity:.9!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;';
+        const sel = document.createElement('select');
+        addOptions(sel, Object.keys(SCENE_LABELS), k => SCENE_LABELS[k], curScenes[t.id] || 'gradient');
+        sel.style.cssText = 'flex:1!important;min-width:0!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:5px 6px!important;font-size:11px!important;';
+        sel.addEventListener('change', () => {
+          try { paintBtnSceneEl(document.getElementById(t.id), sel.value === 'gradient' ? null : sel.value); } catch (e) {}
+        });
+        row.appendChild(lab);
+        row.appendChild(sel);
+        artRows.push({ id: t.id, sel });
+        styPane.appendChild(row);
+      });
+      // ---- Footer: Save (always visible) ----
+      const footer = document.createElement('div');
+      footer.style.cssText = 'padding:10px 12px!important;border-top:1px solid #1f2937!important;flex:0 0 auto!important;';
       const saveBtn = document.createElement('button');
       saveBtn.textContent = 'Save';
-      saveBtn.style.cssText = 'width:100%!important;background:#2563eb!important;color:#fff!important;border:none!important;border-radius:6px!important;padding:7px!important;font-size:12px!important;font-weight:bold!important;cursor:pointer!important;';
+      saveBtn.style.cssText = 'width:100%!important;background:#2563eb!important;color:#fff!important;border:none!important;border-radius:6px!important;padding:8px!important;font-size:12px!important;font-weight:bold!important;cursor:pointer!important;';
       saveBtn.addEventListener('click', () => {
         const v = (teamInput.value || '').trim();
         if (!v) { showToast('Type a team name first.', 'error'); return; }
@@ -2842,24 +2870,14 @@
           applyAllBtnScenes();
         } catch (e) {}
         showToast(`Settings saved (Team: ${v}).`, 'success');
-        // Panel stays open on purpose — if anything looks wrong you can still reach Settings.
       });
+      footer.appendChild(saveBtn);
       panel.appendChild(title);
-      panel.appendChild(teamLbl);
-      panel.appendChild(teamInput);
-      panel.appendChild(layoutLbl);
-      panel.appendChild(layoutSelect);
-      panel.appendChild(dockLbl);
-      panel.appendChild(dockSelect);
-      panel.appendChild(colorLbl);
-      panel.appendChild(colorSelect);
-      panel.appendChild(artLbl);
-      panel.appendChild(scaleLbl);
-      panel.appendChild(scaleInput);
-      panel.appendChild(lockLbl);
-      panel.appendChild(resetPosBtn);
-      panel.appendChild(saveBtn);
+      panel.appendChild(tabBar);
+      panel.appendChild(body);
+      panel.appendChild(footer);
       document.body.appendChild(panel);
+      activateTab('general');
     };
     settingsBtn.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2869,7 +2887,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2';
+    const TOOL_VERSION = '5.2.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
