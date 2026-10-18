@@ -11,7 +11,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
     return;
   }
-  console.log('[Kairos Tool v5.1.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1.4] Script active on host:', window.location.host);
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2662,7 +2662,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.3';
+    const TOOL_VERSION = '5.1.4';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11628,6 +11628,22 @@ Have a good day.`
     if (!isFoodRms) container.appendChild(smsBtn);
     container.appendChild(chatBtn);
     container.appendChild(systemWrapper);
+
+    // Switcher button (RMS only): search customer phone in Switcher
+    if (isFoodRms) {
+      const switcherBtn = createBtn('btn-switcher-search', 'Switcher', '#f59e0b');
+      switcherBtn.title = 'Search customer phone in Switcher';
+      switcherBtn.addEventListener('click', () => {
+        const d = extractRmsOrderDetails();
+        if (!d.phone || d.phone.length < 11) {
+          showToast('Could not find customer phone on this RMS page.', 'error');
+          return;
+        }
+        const url = 'https://www.breadfast.com/switcher/search?q=' + encodeURIComponent(d.phone);
+        try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
+      });
+      container.appendChild(switcherBtn);
+    }
 
     container.appendChild(createSectionDivider());
 
