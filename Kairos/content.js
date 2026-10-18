@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.6] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.7] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2906,7 +2906,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.6';
+    const TOOL_VERSION = '5.2.7';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -6485,9 +6485,9 @@
           }
 
           const { diff, promisedTime, completedTime } = response;
-          // Explicitly requested result → force past quiet mode (neutral toast).
+          // Late order → red alert; early/on-time → neutral (forced past quiet).
           if (diff > 0) {
-            showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info', true);
+            showToast(`Delay: ${diff} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'error');
           } else if (diff < 0) {
             showToast(`Early by: ${Math.abs(diff)} minutes (Promised: ${promisedTime}, Completed: ${completedTime})`, 'info', true);
           } else {
