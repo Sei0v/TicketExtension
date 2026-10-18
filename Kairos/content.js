@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.1] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.3] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -148,7 +148,6 @@
     mountain: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='m' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#93c5fd'/><stop offset='1' stop-color='#e0f2fe'/></linearGradient></defs><rect width='72' height='40' fill='url(#m)'/><polygon points='0,40 20,12 34,40' fill='#64748b'/><polygon points='24,40 44,8 64,40' fill='#475569'/><polygon points='40,12 44,7 48,12 45,16 42,16' fill='#fff'/><circle cx='58' cy='10' r='5' fill='#fde68a'/></svg>`,
     sunset: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='ss' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#7c3aed'/><stop offset='.6' stop-color='#f97316'/><stop offset='1' stop-color='#fbbf24'/></linearGradient></defs><rect width='72' height='40' fill='url(#ss)'/><circle cx='36' cy='26' r='10' fill='#fde68a'/><rect y='28' width='72' height='12' fill='#0c4a6e' opacity='.5'/></svg>`,
     galaxy: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#4c1d95'/><stop offset='1' stop-color='#1e1b4b'/></linearGradient></defs><rect width='72' height='40' fill='url(#g)'/><circle cx='50' cy='16' r='8' fill='#c084fc'/><ellipse cx='50' cy='16' rx='13' ry='4' fill='none' stroke='#f0abfc' stroke-width='1.2' opacity='.8'/><g fill='#fff'><circle cx='12' cy='10' r='1'/><circle cx='22' cy='26' r='1'/><circle cx='34' cy='8' r='1'/><circle cx='60' cy='30' r='1'/><circle cx='8' cy='30' r='1'/><circle cx='42' cy='32' r='1'/></g></svg>`,
-    rainbow: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='rb' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#bae6fd'/><stop offset='1' stop-color='#e0f2fe'/></linearGradient></defs><rect width='72' height='40' fill='url(#rb)'/><g fill='none' stroke-width='4'><path d='M8 38 A28 28 0 0 1 64 38' stroke='#ef4444'/><path d='M12 38 A24 24 0 0 1 60 38' stroke='#f59e0b'/><path d='M16 38 A20 20 0 0 1 56 38' stroke='#facc15'/><path d='M20 38 A16 16 0 0 1 52 38' stroke='#22c55e'/><path d='M24 38 A12 12 0 0 1 48 38' stroke='#3b82f6'/></g></svg>`,
     candy: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><rect width='72' height='40' fill='#fbcfe8'/><g fill='#f472b6'><circle cx='14' cy='12' r='3'/><circle cx='36' cy='24' r='3'/><circle cx='58' cy='10' r='3'/><circle cx='24' cy='32' r='3'/><circle cx='50' cy='30' r='3'/><circle cx='64' cy='24' r='3'/></g><g fill='#fff' opacity='.7'><circle cx='22' cy='14' r='2'/><circle cx='46' cy='12' r='2'/><circle cx='32' cy='30' r='2'/></g></svg>`,
     beach: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='b' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#7dd3fc'/><stop offset='1' stop-color='#0ea5e9'/></linearGradient></defs><rect width='72' height='40' fill='url(#b)'/><rect y='28' width='72' height='12' fill='#fde68a'/><circle cx='56' cy='12' r='7' fill='#f97316'/><path d='M0 28 Q18 25 36 28 T72 28' stroke='#fff' stroke-width='1.5' fill='none' opacity='.7'/></svg>`,
     autumn: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='a' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fed7aa'/><stop offset='1' stop-color='#fdba74'/></linearGradient></defs><rect width='72' height='40' fill='url(#a)'/><rect x='34' y='18' width='4' height='14' fill='#78350f'/><circle cx='36' cy='14' r='10' fill='#ea580c'/><g fill='#b45309'><circle cx='24' cy='30' r='2'/><circle cx='48' cy='28' r='2'/><circle cx='16' cy='22' r='1.6'/></g></svg>`,
@@ -164,7 +163,6 @@
     mountain: '⛰️ Mountain',
     sunset: '🌅 Sunset',
     galaxy: '🪐 Galaxy',
-    rainbow: '🌈 Rainbow',
     candy: '🍬 Candy',
     beach: '🏖️ Beach',
     autumn: '🍂 Autumn',
@@ -237,6 +235,30 @@
         applyAllBtnScenes();
       } catch (e) {}
     });
+  } catch (e) {}
+
+  // ==================== Toolbar button motion (CSS-only) ==================
+  // A single injected <style>. Hover-driven gloss sweep + lift + growing
+  // shadow, all on GPU transforms/opacity — nothing runs while idle, so the
+  // tool stays just as light as before while the buttons feel alive.
+  try {
+    if (!document.getElementById('bf-btn-motion')) {
+      const s = document.createElement('style');
+      s.id = 'bf-btn-motion';
+      s.textContent = `
+        .bf-btn{position:relative!important;overflow:hidden!important;isolation:isolate!important;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.30),0 3px 7px rgba(0,0,0,.22)!important;
+          transition:transform .18s cubic-bezier(.2,.7,.3,1),filter .18s ease,box-shadow .18s ease!important;will-change:transform!important;}
+        .bf-btn::before{content:""!important;position:absolute!important;inset:0!important;pointer-events:none!important;
+          background:linear-gradient(105deg,transparent 32%,rgba(255,255,255,.42) 48%,rgba(255,255,255,.06) 60%,transparent 72%)!important;
+          transform:translateX(-130%)!important;transition:transform .55s ease!important;}
+        .bf-btn:hover{transform:translateY(-2px)!important;filter:brightness(1.09) saturate(1.05)!important;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 9px 18px rgba(0,0,0,.32)!important;}
+        .bf-btn:hover::before{transform:translateX(130%)!important;}
+        .bf-btn:active{transform:translateY(0) scale(.95)!important;filter:brightness(.97)!important;
+          box-shadow:inset 0 2px 5px rgba(0,0,0,.32)!important;transition-duration:.06s!important;}`;
+      (document.head || document.documentElement).appendChild(s);
+    }
   } catch (e) {}
 
   const isElementVisible = (el) => {
@@ -2887,7 +2909,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.1';
+    const TOOL_VERSION = '5.2.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3214,21 +3236,11 @@
       btn.style.fontSize = '11px';
       btn.style.fontWeight = 'bold';
       btn.style.cursor = 'pointer';
-      btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.28), 0 3px 6px rgba(0,0,0,0.22)';
-      btn.style.transition = 'transform 0.1s, filter 0.2s, box-shadow 0.2s';
       btn.style.lineHeight = '1.3';
       btn.style.whiteSpace = 'nowrap';
-
-      btn.addEventListener('mouseenter', () => {
-        btn.style.filter = 'brightness(1.06)';
-        btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.35), 0 4px 10px rgba(0,0,0,0.28)';
-      });
-      btn.addEventListener('mouseleave', () => {
-        btn.style.filter = 'brightness(1)';
-        btn.style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.28), 0 3px 6px rgba(0,0,0,0.22)';
-      });
-      btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.96)');
-      btn.addEventListener('mouseup', () => btn.style.transform = 'scale(1)');
+      // Hover/lift/gloss are handled by the injected .bf-btn CSS (GPU-only,
+      // hover-driven so idle cost is zero). No JS listeners needed here.
+      btn.classList.add('bf-btn');
 
       return btn;
     };
