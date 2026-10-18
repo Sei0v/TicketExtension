@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2.4] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -237,25 +237,21 @@
     });
   } catch (e) {}
 
-  // ==================== Toolbar button motion (CSS-only) ==================
-  // A single injected <style>. Hover-driven gloss sweep + lift + growing
-  // shadow, all on GPU transforms/opacity — nothing runs while idle, so the
-  // tool stays just as light as before while the buttons feel alive.
+  // ==================== Toolbar button motion (CPU-only) ==================
+  // A single injected <style>. Hover life via filter brightness + shadow ONLY
+  // — no transform/opacity, no will-change, so NO GPU compositor layers are
+  // reserved and nothing runs while idle. Painted on the main thread (CPU),
+  // which stays trivial for a handful of small buttons.
   try {
     if (!document.getElementById('bf-btn-motion')) {
       const s = document.createElement('style');
       s.id = 'bf-btn-motion';
       s.textContent = `
-        .bf-btn{position:relative!important;overflow:hidden!important;isolation:isolate!important;
-          box-shadow:inset 0 1px 0 rgba(255,255,255,.30),0 3px 7px rgba(0,0,0,.22)!important;
-          transition:transform .18s cubic-bezier(.2,.7,.3,1),filter .18s ease,box-shadow .18s ease!important;will-change:transform!important;}
-        .bf-btn::before{content:""!important;position:absolute!important;inset:0!important;pointer-events:none!important;
-          background:linear-gradient(105deg,transparent 32%,rgba(255,255,255,.42) 48%,rgba(255,255,255,.06) 60%,transparent 72%)!important;
-          transform:translateX(-130%)!important;transition:transform .55s ease!important;}
-        .bf-btn:hover{transform:translateY(-2px)!important;filter:brightness(1.09) saturate(1.05)!important;
-          box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 9px 18px rgba(0,0,0,.32)!important;}
-        .bf-btn:hover::before{transform:translateX(130%)!important;}
-        .bf-btn:active{transform:translateY(0) scale(.95)!important;filter:brightness(.97)!important;
+        .bf-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.30),0 3px 7px rgba(0,0,0,.22)!important;
+          transition:filter .18s ease,box-shadow .18s ease!important;}
+        .bf-btn:hover{filter:brightness(1.10) saturate(1.06)!important;
+          box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 8px 16px rgba(0,0,0,.30)!important;}
+        .bf-btn:active{filter:brightness(.96)!important;
           box-shadow:inset 0 2px 5px rgba(0,0,0,.32)!important;transition-duration:.06s!important;}`;
       (document.head || document.documentElement).appendChild(s);
     }
@@ -2909,7 +2905,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.3';
+    const TOOL_VERSION = '5.2.4';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';

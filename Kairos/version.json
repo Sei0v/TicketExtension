@@ -1,1 +1,1 @@
-{"notes": "v5.2.3: livelier buttons (hover gloss sweep + lift via GPU-only CSS), rainbow scene removed.", "updated": "2026-10-18", "version": "5.2.3"}
+{"notes": "v5.2.4: button hover life via CPU-only (filter+shadow), no GPU compositor layers.", "updated": "2026-10-18", "version": "5.2.4"}
