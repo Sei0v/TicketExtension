@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.1.7] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.2] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -130,6 +130,111 @@
         } else if (local) {
           sharedStore.set({ bf_default_team: local });
         }
+      } catch (e) {}
+    });
+  } catch (e) {}
+
+  // ==================== Button art themes (per button) ====================
+  // Lightweight inline SVG backgrounds (data-URIs): rendered once as static
+  // images — no network, no animation, no observers — pure decoration.
+  // A per-button map ({ btnId: sceneKey }) lives in localStorage and is
+  // mirrored to shared storage so Kairos and RMS stay in sync.
+  const BTN_SCENES = {
+    water: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='w' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#7dd3fc'/><stop offset='1' stop-color='#0369a1'/></linearGradient></defs><rect width='72' height='40' fill='url(#w)'/><path d='M0 24 Q18 19 36 24 T72 24 V40 H0 Z' fill='#38bdf8' opacity='.65'/><path d='M0 30 Q18 25 36 30 T72 30 V40 H0 Z' fill='#0284c7' opacity='.6'/><circle cx='12' cy='10' r='5' fill='#fef9c3' opacity='.9'/></svg>`,
+    sun: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#93c5fd'/><stop offset='1' stop-color='#fde68a'/></linearGradient></defs><rect width='72' height='40' fill='url(#s)'/><circle cx='54' cy='13' r='9' fill='#f59e0b'/><circle cx='54' cy='13' r='12' fill='#f59e0b' opacity='.35'/><rect y='30' width='72' height='10' fill='#a3e635' opacity='.8'/></svg>`,
+    tree: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='t' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#bae6fd'/><stop offset='1' stop-color='#e0f2fe'/></linearGradient></defs><rect width='72' height='40' fill='url(#t)'/><rect y='30' width='72' height='10' fill='#65a30d'/><rect x='34' y='20' width='4' height='11' fill='#92400e'/><circle cx='36' cy='16' r='9' fill='#16a34a'/><circle cx='28' cy='20' r='6' fill='#22c55e'/><circle cx='44' cy='20' r='6' fill='#22c55e'/></svg>`,
+    flower: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='f' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fecdd3'/><stop offset='1' stop-color='#f9a8d4'/></linearGradient></defs><rect width='72' height='40' fill='url(#f)'/><g fill='#fff'><circle cx='16' cy='16' r='2.4'/><circle cx='13' cy='13' r='2.4'/><circle cx='19' cy='13' r='2.4'/><circle cx='13' cy='19' r='2.4'/><circle cx='19' cy='19' r='2.4'/></g><circle cx='16' cy='16' r='2' fill='#facc15'/><g fill='#fff'><circle cx='40' cy='24' r='2.4'/><circle cx='37' cy='21' r='2.4'/><circle cx='43' cy='21' r='2.4'/><circle cx='37' cy='27' r='2.4'/><circle cx='43' cy='27' r='2.4'/></g><circle cx='40' cy='24' r='2' fill='#facc15'/></svg>`,
+    night: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='n' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#1e1b4b'/><stop offset='1' stop-color='#312e81'/></linearGradient></defs><rect width='72' height='40' fill='url(#n)'/><circle cx='54' cy='12' r='7' fill='#fde68a'/><circle cx='50' cy='10' r='6' fill='#312e81'/><g fill='#fff'><circle cx='12' cy='10' r='1'/><circle cx='24' cy='18' r='1'/><circle cx='40' cy='8' r='1'/><circle cx='60' cy='26' r='1'/><circle cx='18' cy='28' r='1'/></g></svg>`,
+    mountain: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='m' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#93c5fd'/><stop offset='1' stop-color='#e0f2fe'/></linearGradient></defs><rect width='72' height='40' fill='url(#m)'/><polygon points='0,40 20,12 34,40' fill='#64748b'/><polygon points='24,40 44,8 64,40' fill='#475569'/><polygon points='40,12 44,7 48,12 45,16 42,16' fill='#fff'/><circle cx='58' cy='10' r='5' fill='#fde68a'/></svg>`,
+    sunset: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='ss' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#7c3aed'/><stop offset='.6' stop-color='#f97316'/><stop offset='1' stop-color='#fbbf24'/></linearGradient></defs><rect width='72' height='40' fill='url(#ss)'/><circle cx='36' cy='26' r='10' fill='#fde68a'/><rect y='28' width='72' height='12' fill='#0c4a6e' opacity='.5'/></svg>`,
+    galaxy: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#4c1d95'/><stop offset='1' stop-color='#1e1b4b'/></linearGradient></defs><rect width='72' height='40' fill='url(#g)'/><circle cx='50' cy='16' r='8' fill='#c084fc'/><ellipse cx='50' cy='16' rx='13' ry='4' fill='none' stroke='#f0abfc' stroke-width='1.2' opacity='.8'/><g fill='#fff'><circle cx='12' cy='10' r='1'/><circle cx='22' cy='26' r='1'/><circle cx='34' cy='8' r='1'/><circle cx='60' cy='30' r='1'/><circle cx='8' cy='30' r='1'/><circle cx='42' cy='32' r='1'/></g></svg>`,
+    rainbow: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='rb' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#bae6fd'/><stop offset='1' stop-color='#e0f2fe'/></linearGradient></defs><rect width='72' height='40' fill='url(#rb)'/><g fill='none' stroke-width='4'><path d='M8 38 A28 28 0 0 1 64 38' stroke='#ef4444'/><path d='M12 38 A24 24 0 0 1 60 38' stroke='#f59e0b'/><path d='M16 38 A20 20 0 0 1 56 38' stroke='#facc15'/><path d='M20 38 A16 16 0 0 1 52 38' stroke='#22c55e'/><path d='M24 38 A12 12 0 0 1 48 38' stroke='#3b82f6'/></g></svg>`,
+    candy: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><rect width='72' height='40' fill='#fbcfe8'/><g fill='#f472b6'><circle cx='14' cy='12' r='3'/><circle cx='36' cy='24' r='3'/><circle cx='58' cy='10' r='3'/><circle cx='24' cy='32' r='3'/><circle cx='50' cy='30' r='3'/><circle cx='64' cy='24' r='3'/></g><g fill='#fff' opacity='.7'><circle cx='22' cy='14' r='2'/><circle cx='46' cy='12' r='2'/><circle cx='32' cy='30' r='2'/></g></svg>`,
+    beach: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='b' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#7dd3fc'/><stop offset='1' stop-color='#0ea5e9'/></linearGradient></defs><rect width='72' height='40' fill='url(#b)'/><rect y='28' width='72' height='12' fill='#fde68a'/><circle cx='56' cy='12' r='7' fill='#f97316'/><path d='M0 28 Q18 25 36 28 T72 28' stroke='#fff' stroke-width='1.5' fill='none' opacity='.7'/></svg>`,
+    autumn: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='a' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#fed7aa'/><stop offset='1' stop-color='#fdba74'/></linearGradient></defs><rect width='72' height='40' fill='url(#a)'/><rect x='34' y='18' width='4' height='14' fill='#78350f'/><circle cx='36' cy='14' r='10' fill='#ea580c'/><g fill='#b45309'><circle cx='24' cy='30' r='2'/><circle cx='48' cy='28' r='2'/><circle cx='16' cy='22' r='1.6'/></g></svg>`,
+    rain: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'><defs><linearGradient id='r' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#94a3b8'/><stop offset='1' stop-color='#64748b'/></linearGradient></defs><rect width='72' height='40' fill='url(#r)'/><ellipse cx='30' cy='12' rx='16' ry='7' fill='#e2e8f0'/><ellipse cx='46' cy='14' rx='12' ry='6' fill='#cbd5e1'/><g stroke='#38bdf8' stroke-width='1.6'><line x1='20' y1='24' x2='17' y2='32'/><line x1='32' y1='24' x2='29' y2='32'/><line x1='44' y1='24' x2='41' y2='32'/><line x1='56' y1='24' x2='53' y2='32'/></g></svg>`
+  };
+  const SCENE_LABELS = {
+    gradient: 'Gradient (default)',
+    water: '🌊 Water',
+    sun: '☀️ Sun',
+    tree: '🌳 Tree',
+    flower: '🌸 Flower',
+    night: '🌙 Night',
+    mountain: '⛰️ Mountain',
+    sunset: '🌅 Sunset',
+    galaxy: '🪐 Galaxy',
+    rainbow: '🌈 Rainbow',
+    candy: '🍬 Candy',
+    beach: '🏖️ Beach',
+    autumn: '🍂 Autumn',
+    rain: '🌧️ Rain'
+  };
+  // Buttons eligible for theming (id + display label for Settings).
+  const BUTTON_THEME_TARGETS = [
+    { id: 'btn-create-ticket', label: 'Create Ticket' },
+    { id: 'btn-senior-ticket', label: 'Senior Ticket' },
+    { id: 'btn-tree-ticket', label: 'Tree' },
+    { id: 'btn-autofill-ticket', label: 'Auto Fill' },
+    { id: 'btn-rms-order', label: 'RMS' },
+    { id: 'btn-sms-dashboard', label: 'SMS' },
+    { id: 'btn-chat-search', label: 'Chat' },
+    { id: 'btn-system-menu', label: 'System' },
+    { id: 'btn-switcher-search', label: 'Switcher' },
+    { id: 'btn-delay-calc', label: 'Delay' },
+    { id: 'btn-percentage-calc', label: 'Calculator' },
+    { id: 'btn-email-templates', label: 'Email' },
+    { id: 'btn-sheets-menu', label: 'Sheets' }
+  ];
+  const BTN_SCENE_KEY = 'bf_btn_scenes';
+  const getBtnScenes = () => {
+    try { return JSON.parse(localStorage.getItem(BTN_SCENE_KEY) || '{}') || {}; } catch (e) { return {}; }
+  };
+  const saveBtnScenes = (map) => {
+    const m = map || {};
+    try { localStorage.setItem(BTN_SCENE_KEY, JSON.stringify(m)); } catch (e) {}
+    try { sharedStore.set({ [BTN_SCENE_KEY]: m }); } catch (e) {}
+  };
+  // Paint (or clear) a single button's scene. Clearing restores the plain
+  // gradient from the active color theme.
+  const paintBtnSceneEl = (el, sceneKey) => {
+    if (!el) return;
+    try {
+      const svg = sceneKey && BTN_SCENES[sceneKey];
+      if (!svg) {
+        el.style.backgroundImage = '';
+        el.style.backgroundSize = '';
+        el.style.backgroundPosition = '';
+        el.style.textShadow = '';
+        return;
+      }
+      el.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.textShadow = '0 1px 2px rgba(0,0,0,0.65)';
+    } catch (e) {}
+  };
+  const applyAllBtnScenes = () => {
+    try {
+      const map = getBtnScenes();
+      BUTTON_THEME_TARGETS.forEach(t => paintBtnSceneEl(document.getElementById(t.id), map[t.id]));
+    } catch (e) {}
+  };
+  // Hydrate the scene map from shared storage (Kairos ↔ RMS) and re-apply.
+  try {
+    sharedStore.get([BTN_SCENE_KEY], (res) => {
+      try {
+        const shared = res && res[BTN_SCENE_KEY];
+        let local = null;
+        try { local = localStorage.getItem(BTN_SCENE_KEY); } catch (e) {}
+        if (shared && typeof shared === 'object') {
+          try { localStorage.setItem(BTN_SCENE_KEY, JSON.stringify(shared)); } catch (e) {}
+        } else if (local) {
+          let parsed = {};
+          try { parsed = JSON.parse(local) || {}; } catch (e) {}
+          sharedStore.set({ [BTN_SCENE_KEY]: parsed });
+        }
+        applyAllBtnScenes();
       } catch (e) {}
     });
   } catch (e) {}
@@ -2211,6 +2316,9 @@
           }
         });
       } catch (e) {}
+      // Scenes painted over the gradient always win, so re-apply them after
+      // any color-theme recolor.
+      try { applyAllBtnScenes(); } catch (e) {}
     };
     // === Toolbar dock (taskbar-style): floating corner/drag (default) or a bar
     // pinned to the top / bottom / left / right screen edge.
@@ -2629,6 +2737,35 @@
         colorSelect.appendChild(o);
       });
       colorSelect.style.cssText = 'width:100%!important;box-sizing:border-box!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:7px 9px!important;font-size:12px!important;margin-bottom:10px!important;';
+      // Button art themes — one dropdown per button (live preview on change).
+      const artLbl = document.createElement('div');
+      artLbl.textContent = 'Button art (per button)';
+      artLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin:2px 0 6px!important;';
+      const artRows = [];
+      const curScenes = getBtnScenes();
+      BUTTON_THEME_TARGETS.forEach(t => {
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex!important;align-items:center!important;gap:6px!important;margin-bottom:6px!important;';
+        const lab = document.createElement('div');
+        lab.textContent = t.label;
+        lab.style.cssText = 'flex:0 0 84px!important;font-size:11px!important;opacity:.85!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;';
+        const sel = document.createElement('select');
+        Object.keys(SCENE_LABELS).forEach(key => {
+          const o = document.createElement('option');
+          o.value = key;
+          o.textContent = SCENE_LABELS[key];
+          if (key === (curScenes[t.id] || 'gradient')) o.selected = true;
+          sel.appendChild(o);
+        });
+        sel.style.cssText = 'flex:1!important;min-width:0!important;background:#1f2937!important;color:#fff!important;border:1px solid #4b5563!important;border-radius:6px!important;padding:4px 6px!important;font-size:11px!important;';
+        sel.addEventListener('change', () => {
+          try { paintBtnSceneEl(document.getElementById(t.id), sel.value === 'gradient' ? null : sel.value); } catch (e) {}
+        });
+        row.appendChild(lab);
+        row.appendChild(sel);
+        artRows.push({ id: t.id, sel });
+        artLbl.appendChild(row); // temp holder; re-parented below in order
+      });
       const scaleLbl = document.createElement('div');
       scaleLbl.style.cssText = 'font-size:11px!important;opacity:.8!important;margin-bottom:4px!important;';
       const scaleValSpan = document.createElement('span');
@@ -2694,6 +2831,16 @@
         try { applyToolbarScale(scaleVal); } catch (e) {}
         try { applyToolbarLockVisual(); } catch (e) {}
         try { paintLockBtn(); } catch (e) {}
+        // Persist per-button art scenes (skip plain "gradient").
+        try {
+          const sceneMap = {};
+          artRows.forEach(r => {
+            const val = r.sel.value;
+            if (val && val !== 'gradient') sceneMap[r.id] = val;
+          });
+          saveBtnScenes(sceneMap);
+          applyAllBtnScenes();
+        } catch (e) {}
         showToast(`Settings saved (Team: ${v}).`, 'success');
         // Panel stays open on purpose — if anything looks wrong you can still reach Settings.
       });
@@ -2706,6 +2853,7 @@
       panel.appendChild(dockSelect);
       panel.appendChild(colorLbl);
       panel.appendChild(colorSelect);
+      panel.appendChild(artLbl);
       panel.appendChild(scaleLbl);
       panel.appendChild(scaleInput);
       panel.appendChild(lockLbl);
@@ -2721,7 +2869,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.7';
+    const TOOL_VERSION = '5.2';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3067,71 +3215,9 @@
       return btn;
     };
 
-    // === Artistic button scenes (experimental, applied to ONE button) ======
-    // Tiny inline SVG backgrounds (data-URIs) — rendered once as static
-    // images: no network, no animation, no observers. Pure decoration.
-    const BTN_SCENES = {
-      water: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
-        <defs><linearGradient id='w' x1='0' y1='0' x2='0' y2='1'>
-        <stop offset='0' stop-color='#7dd3fc'/><stop offset='1' stop-color='#0369a1'/>
-        </linearGradient></defs>
-        <rect width='72' height='40' fill='url(#w)'/>
-        <path d='M0 24 Q18 19 36 24 T72 24 V40 H0 Z' fill='#38bdf8' opacity='.65'/>
-        <path d='M0 30 Q18 25 36 30 T72 30 V40 H0 Z' fill='#0284c7' opacity='.6'/>
-        <circle cx='12' cy='10' r='5' fill='#fef9c3' opacity='.9'/></svg>`,
-      sun: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
-        <defs><linearGradient id='s' x1='0' y1='0' x2='0' y2='1'>
-        <stop offset='0' stop-color='#93c5fd'/><stop offset='1' stop-color='#fde68a'/>
-        </linearGradient></defs>
-        <rect width='72' height='40' fill='url(#s)'/>
-        <circle cx='54' cy='13' r='9' fill='#f59e0b'/>
-        <circle cx='54' cy='13' r='12' fill='#f59e0b' opacity='.35'/>
-        <rect y='30' width='72' height='10' fill='#a3e635' opacity='.8'/></svg>`,
-      tree: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
-        <defs><linearGradient id='t' x1='0' y1='0' x2='0' y2='1'>
-        <stop offset='0' stop-color='#bae6fd'/><stop offset='1' stop-color='#e0f2fe'/>
-        </linearGradient></defs>
-        <rect width='72' height='40' fill='url(#t)'/>
-        <rect y='30' width='72' height='10' fill='#65a30d'/>
-        <rect x='34' y='20' width='4' height='11' fill='#92400e'/>
-        <circle cx='36' cy='16' r='9' fill='#16a34a'/>
-        <circle cx='28' cy='20' r='6' fill='#22c55e'/>
-        <circle cx='44' cy='20' r='6' fill='#22c55e'/></svg>`,
-      flower: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
-        <defs><linearGradient id='f' x1='0' y1='0' x2='0' y2='1'>
-        <stop offset='0' stop-color='#fecdd3'/><stop offset='1' stop-color='#f9a8d4'/>
-        </linearGradient></defs>
-        <rect width='72' height='40' fill='url(#f)'/>
-        <g fill='#fff'><circle cx='16' cy='16' r='2.4'/><circle cx='13' cy='13' r='2.4'/><circle cx='19' cy='13' r='2.4'/><circle cx='13' cy='19' r='2.4'/><circle cx='19' cy='19' r='2.4'/></g>
-        <circle cx='16' cy='16' r='2' fill='#facc15'/>
-        <g fill='#fff'><circle cx='40' cy='24' r='2.4'/><circle cx='37' cy='21' r='2.4'/><circle cx='43' cy='21' r='2.4'/><circle cx='37' cy='27' r='2.4'/><circle cx='43' cy='27' r='2.4'/></g>
-        <circle cx='40' cy='24' r='2' fill='#facc15'/></svg>`,
-      night: `<svg xmlns='http://www.w3.org/2000/svg' width='72' height='40'>
-        <defs><linearGradient id='n' x1='0' y1='0' x2='0' y2='1'>
-        <stop offset='0' stop-color='#1e1b4b'/><stop offset='1' stop-color='#312e81'/>
-        </linearGradient></defs>
-        <rect width='72' height='40' fill='url(#n)'/>
-        <circle cx='54' cy='12' r='7' fill='#fde68a'/><circle cx='50' cy='10' r='6' fill='#312e81'/>
-        <g fill='#fff'><circle cx='12' cy='10' r='1'/><circle cx='24' cy='18' r='1'/><circle cx='40' cy='8' r='1'/><circle cx='60' cy='26' r='1'/><circle cx='18' cy='28' r='1'/></g></svg>`
-    };
-    const paintBtnScene = (btn, name) => {
-      const svg = BTN_SCENES[name];
-      if (!svg || !btn) return;
-      try {
-        btn.style.backgroundImage = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-        btn.style.backgroundSize = 'cover';
-        btn.style.backgroundPosition = 'center';
-        btn.style.textShadow = '0 1px 2px rgba(0,0,0,0.65)';
-      } catch (e) {}
-    };
-
     // Section 1: Ticket Actions (Calm Blue)
     const seniorBtn = createBtn('btn-senior-ticket', 'Senior Ticket', '#2563eb');
     const createBtnEl = createBtn('btn-create-ticket', isKairos ? 'Create Ticket' : 'Normal Ticket', '#2563eb');
-    // EXPERIMENT: paint ONE button with an artistic scene (swap the name to
-    // try: water | sun | tree | flower | night). Set to null to go back flat.
-    const TEST_BTN_SCENE = 'tree';
-    if (TEST_BTN_SCENE) paintBtnScene(createBtnEl, TEST_BTN_SCENE);
 
     // Section 2: Customer & Operations (Calm Teal)
     const rmsBtn = createBtn('btn-rms-order', 'RMS', '#0d9488');
@@ -11788,6 +11874,7 @@ Have a good day.`
     try { applyToolbarLayout(getToolbarLayout()); } catch (e) {}
     try { applyDockMode(getDockMode()); } catch (e) {}
     try { applyColorTheme(getColorTheme()); } catch (e) {}
+    try { applyAllBtnScenes(); } catch (e) {}
     try { applyToolbarScale(getToolbarScale()); } catch (e) {}
     try { applyToolbarLockVisual(); } catch (e) {}
     try { paintLockBtn(); } catch (e) {}
