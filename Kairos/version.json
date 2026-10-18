@@ -1,1 +1,1 @@
-{"notes": "v5.1.4: Switcher button on RMS toolbar — searches customer phone.", "updated": "2026-10-18", "version": "5.1.4"}
+{"notes": "v5.1.5: Switcher button now passes phone to /switcher/ which auto-types it into the Select2 search.", "updated": "2026-10-18", "version": "5.1.5"}

@@ -8,10 +8,49 @@
 
   const isKairos = window.location.host.includes('kairos');
 
-  if (!isBreadfastAdmin && !isFoodRms && !isKairos) {
+  // Switcher app on www.breadfast.com (customer switcher with a Select2 search).
+  const isSwitcherPage = window.location.host.includes('breadfast.com') &&
+    window.location.pathname.includes('switcher');
+
+  if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.1.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.1.5] Script active on host:', window.location.host);
+
+  // Switcher page: auto-open the Select2 dropdown and type the customer
+  // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
+  // Results are NEVER clicked automatically — the agent picks manually.
+  if (isSwitcherPage) {
+    try {
+      const bfPhone = (new URLSearchParams(window.location.search).get('bf_phone') || '').trim();
+      if (bfPhone) {
+        const t0 = Date.now();
+        const openTimer = setInterval(() => {
+          const sel = document.querySelector('.select2');
+          if (!sel) {
+            if (Date.now() - t0 > 20000) clearInterval(openTimer);
+            return;
+          }
+          clearInterval(openTimer);
+          // Open the dropdown: Select2 listens for mousedown on the container.
+          const selection = sel.querySelector('.select2-selection');
+          if (selection) {
+            selection.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+          }
+          // Type the phone into the Select2 search field once it appears.
+          setTimeout(() => {
+            const field = document.querySelector('.select2-search__field');
+            if (field) {
+              field.focus();
+              field.value = bfPhone;
+              field.dispatchEvent(new Event('input', { bubbles: true }));
+              console.log('[BF Kairos] Switcher search typed:', bfPhone);
+            }
+          }, 400);
+        }, 400);
+      }
+    } catch (e) {}
+  }
 
   // Kairos conversations page: destination for new tickets handed off from RMS.
   // Defined here at the top (not at the file end) because the RMS details
@@ -2662,7 +2701,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.1.4';
+    const TOOL_VERSION = '5.1.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -11639,7 +11678,7 @@ Have a good day.`
           showToast('Could not find customer phone on this RMS page.', 'error');
           return;
         }
-        const url = 'https://www.breadfast.com/switcher/search?q=' + encodeURIComponent(d.phone);
+        const url = 'https://www.breadfast.com/switcher/?bf_phone=' + encodeURIComponent(d.phone);
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
       });
       container.appendChild(switcherBtn);
