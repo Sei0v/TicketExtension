@@ -5493,7 +5493,7 @@
             // Wallet-refund preset (Senior Ticket) also bypasses tree/basics.
             if (extraParams.bf_preset === 'wallet_refund') {
               const presetOk = await fillKairosComposeWalletRefund();
-              if (isSenior) await fillSeniorDescription();
+              await fillSeniorDescription();
               showToast(presetOk
                 ? 'Wallet-refund ticket ready: Type, request type, Team & subject filled.'
                 : 'Wallet-refund partially filled — complete the highlighted field manually.',
@@ -6145,7 +6145,7 @@
     };
 
     seniorBtn.addEventListener('click', () => {
-      if (isFoodRms) { rmsTicketHandoff(seniorBtn); return; }
+      if (isFoodRms) { rmsTicketHandoff(seniorBtn, 'wallet_refund'); return; }
       // Kairos: Senior Ticket = wallet-refund preset (Team cx seniors restaurant).
       openTicketPage(seniorBtn, 'Senior Ticket', { bf_preset: 'wallet_refund' });
     });
@@ -6156,6 +6156,7 @@
     // Req to call: dedicated preset — Type=Customer Requests, request type=
     // "Customer requested to be called", Team=cx retention restaurant, subject.
     reqCallBtn.addEventListener('click', () => {
+      if (isFoodRms) { rmsTicketHandoff(reqCallBtn, 'req_to_call'); return; }
       openTicketPage(reqCallBtn, 'req to call', { bf_preset: 'req_to_call' });
     });
 
@@ -12011,10 +12012,11 @@ Have a good day.`
       return div;
     };
 
-    // Section 1: Ticket Actions (Calm Blue) — on RMS only Create + Tree.
-    if (!isFoodRms) container.appendChild(seniorBtn);
+    // Section 1: Ticket Actions (Calm Blue) — Senior (wallet refund), Create,
+    // and Req to call all show on Kairos AND RMS.
+    container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
-    if (!isFoodRms) container.appendChild(reqCallBtn);
+    container.appendChild(reqCallBtn);
     container.appendChild(treeWrapper);
     if (!isFoodRms) container.appendChild(autoFillWrapper);
 
@@ -12074,7 +12076,7 @@ Have a good day.`
           window.__bfAutoTicketDone = true;
           const autoBtn = document.createElement('div');
           const autoParams = { bf_order_number: autoUsp.get('bf_order_number') || '', bf_phone: autoUsp.get('bf_phone') || '', bf_autostart: '1' };
-          for (const k of ['bf_tree_type', 'bf_category', 'bf_detail', 'bf_sub_detail', 'bf_tree_choice', 'bf_is_senior', 'bf_auto_via']) {
+          for (const k of ['bf_tree_type', 'bf_category', 'bf_detail', 'bf_sub_detail', 'bf_tree_choice', 'bf_is_senior', 'bf_auto_via', 'bf_preset']) {
             const v = autoUsp.get(k);
             if (v) autoParams[k] = v;
           }
@@ -12668,7 +12670,7 @@ Have a good day.`
   }
 
   // Shared RMS → Kairos handoff: validate RMS data, open Kairos in a new tab.
-  function rmsTicketHandoff(btnEl) {
+  function rmsTicketHandoff(btnEl, preset) {
     const origText = btnEl ? btnEl.textContent : '';
     const d = extractRmsOrderDetails();
     const orderOk = d.orderNumber && (typeof isValidOrderNumber === 'function' ? isValidOrderNumber(d.orderNumber) : /^\d{4}-\d{5,14}$/.test(d.orderNumber));
@@ -12680,7 +12682,8 @@ Have a good day.`
       showToast('Could not find the customer phone on this RMS page yet — wait for it to load and retry.', 'error');
       return false;
     }
-    const url = KAIROS_TICKETS_URL + '?bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone) + '&bf_autostart=1';
+    let url = KAIROS_TICKETS_URL + '?bf_order_number=' + encodeURIComponent(d.orderNumber) + '&bf_phone=' + encodeURIComponent(d.phone) + '&bf_autostart=1';
+    if (preset) url += '&bf_preset=' + encodeURIComponent(preset);
     try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (e) {}
     if (btnEl) {
       btnEl.textContent = '✓ Opened';
