@@ -5490,6 +5490,16 @@
                 presetOk ? 'success' : 'error');
               return;
             }
+            // Wallet-refund preset (Senior Ticket) also bypasses tree/basics.
+            if (extraParams.bf_preset === 'wallet_refund') {
+              const presetOk = await fillKairosComposeWalletRefund();
+              if (isSenior) await fillSeniorDescription();
+              showToast(presetOk
+                ? 'Wallet-refund ticket ready: Type, request type, Team & subject filled.'
+                : 'Wallet-refund partially filled — complete the highlighted field manually.',
+                presetOk ? 'success' : 'error');
+              return;
+            }
             {
               // Tree menu → full tree fill; Normal/Senior without tree → basics
               // (BU, Status, Team, Order, Subject=order). Senior adds description template.
@@ -5774,6 +5784,67 @@
                 setModalSubject(`Request to call by CX - ${orderNo}`);
               } else {
                 console.log('[BF Kairos] [Req2Call] No order number found.');
+                ok = false;
+              }
+              return ok;
+            }
+            // Wallet-refund preset (Senior Ticket): Type=Customer Requests →
+            // Customer request type="Wallet Refund" → Team=cx seniors restaurant.
+            // BU/Status/Order reuse the basics helpers; subject fixed to
+            // "Wallet Refund - {order}". Team is hardcoded (not Settings).
+            async function fillKairosComposeWalletRefund() {
+              let ok = true;
+              // Business unit
+              const buTr = await waitModalTriggerShared('Business unit');
+              if (buTr && !isDropdownSelected(buTr, 'Food Aggregation')) {
+                console.log('[BF Kairos] [WalletRefund] Setting Business unit: Food Aggregation...');
+                await assertDropdown('Business unit', 'Food Aggregation', 3000);
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Type = Customer Requests (must precede the request-type field,
+              // which only renders once this Type is chosen).
+              const typeTr = await waitModalTriggerShared('Type');
+              if (typeTr && !isDropdownSelected(typeTr, 'Customer Requests')) {
+                console.log('[BF Kairos] [WalletRefund] Setting Type: Customer Requests...');
+                const typeOk = await assertDropdown('Type', 'Customer Requests', 3000);
+                if (!typeOk) ok = false;
+                await new Promise(r => setTimeout(r, 300));
+              } else if (!typeTr) {
+                console.log('[BF Kairos] [WalletRefund] Type trigger NOT FOUND.');
+                ok = false;
+              }
+              // Customer request type (renders only after Type commits).
+              const crtTr = await waitModalTriggerShared('Customer request type', 3500);
+              if (crtTr && !isDropdownSelected(crtTr, 'Wallet Refund')) {
+                console.log('[BF Kairos] [WalletRefund] Setting Customer request type: Wallet Refund...');
+                const crtOk = await assertDropdown('Customer request type', 'Wallet Refund', 3000);
+                if (!crtOk) ok = false;
+              } else if (!crtTr) {
+                console.log('[BF Kairos] [WalletRefund] Customer request type trigger NOT FOUND.');
+                ok = false;
+              }
+              // Status = Open
+              const stTr = await waitModalTriggerShared('Status');
+              if (stTr && !isDropdownSelected(stTr, 'Open')) {
+                console.log('[BF Kairos] [WalletRefund] Setting Status: Open...');
+                await assertDropdown('Status', 'Open', 3000);
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Team fixed for this preset (not the Settings default).
+              const teamTr = await waitModalTriggerShared('Team');
+              if (teamTr && !isDropdownSelected(teamTr, 'cx seniors restaurant')) {
+                console.log('[BF Kairos] [WalletRefund] Setting Team: cx seniors restaurant...');
+                const teamOk = await assertDropdown('Team', 'cx seniors restaurant', 3000);
+                if (!teamOk) ok = false;
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Order number + subject "Wallet Refund - {order}".
+              const orderNo = await resolveModalOrderNo();
+              if (orderNo) {
+                await typeModalOrderNo(orderNo);
+                setModalSubject(`Wallet Refund - ${orderNo}`);
+              } else {
+                console.log('[BF Kairos] [WalletRefund] No order number found.');
                 ok = false;
               }
               return ok;
@@ -6075,7 +6146,8 @@
 
     seniorBtn.addEventListener('click', () => {
       if (isFoodRms) { rmsTicketHandoff(seniorBtn); return; }
-      openTicketPage(seniorBtn, 'Senior Ticket');
+      // Kairos: Senior Ticket = wallet-refund preset (Team cx seniors restaurant).
+      openTicketPage(seniorBtn, 'Senior Ticket', { bf_preset: 'wallet_refund' });
     });
     createBtnEl.addEventListener('click', () => {
       if (isFoodRms) { rmsTicketHandoff(createBtnEl); return; }
