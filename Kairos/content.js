@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.2.7] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.3.0] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -173,6 +173,7 @@
   const BUTTON_THEME_TARGETS = [
     { id: 'btn-create-ticket', label: 'Create Ticket' },
     { id: 'btn-senior-ticket', label: 'Senior Ticket' },
+    { id: 'btn-req-to-call', label: 'Req to call' },
     { id: 'btn-tree-ticket', label: 'Tree' },
     { id: 'btn-autofill-ticket', label: 'Auto Fill' },
     { id: 'btn-rms-order', label: 'RMS' },
@@ -2906,7 +2907,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.2.7';
+    const TOOL_VERSION = '5.3.0';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3245,6 +3246,8 @@
     // Section 1: Ticket Actions (Calm Blue)
     const seniorBtn = createBtn('btn-senior-ticket', 'Senior Ticket', '#2563eb');
     const createBtnEl = createBtn('btn-create-ticket', isKairos ? 'Create Ticket' : 'Normal Ticket', '#2563eb');
+    const reqCallBtn = createBtn('btn-req-to-call', 'Req to call', '#2563eb');
+    reqCallBtn.title = 'New ticket: Customer Requests → requested to be called (cx retention restaurant)';
 
     // Section 2: Customer & Operations (Calm Teal)
     const rmsBtn = createBtn('btn-rms-order', 'RMS', '#0d9488');
@@ -5478,6 +5481,15 @@
               return;
             }
             console.log('[BF Kairos] Via is set, filling tree...');
+            // Req-to-call preset bypasses the tree/basics path entirely.
+            if (extraParams.bf_preset === 'req_to_call') {
+              const presetOk = await fillKairosComposeReqToCall();
+              showToast(presetOk
+                ? 'Req-to-call ticket ready: Type, request type, Team & subject filled.'
+                : 'Req-to-call partially filled — complete the highlighted field manually.',
+                presetOk ? 'success' : 'error');
+              return;
+            }
             {
               // Tree menu → full tree fill; Normal/Senior without tree → basics
               // (BU, Status, Team, Order, Subject=order). Senior adds description template.
@@ -5704,6 +5716,67 @@
                 console.log('[BF Kairos] No order number found for modal.');
               }
               return true;
+            }
+            // Req-to-call preset: Type=Customer Requests → Customer request type
+            // ="Customer requested to be called" → Team=cx retention restaurant.
+            // BU/Status/Order reuse the basics helpers; subject is fixed to
+            // "Request to call by CX - {order}". Team is hardcoded (not Settings).
+            async function fillKairosComposeReqToCall() {
+              let ok = true;
+              // Business unit
+              const buTr = await waitModalTriggerShared('Business unit');
+              if (buTr && !isDropdownSelected(buTr, 'Food Aggregation')) {
+                console.log('[BF Kairos] [Req2Call] Setting Business unit: Food Aggregation...');
+                await assertDropdown('Business unit', 'Food Aggregation', 3000);
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Type = Customer Requests (must precede the request-type field,
+              // which only renders once this Type is chosen).
+              const typeTr = await waitModalTriggerShared('Type');
+              if (typeTr && !isDropdownSelected(typeTr, 'Customer Requests')) {
+                console.log('[BF Kairos] [Req2Call] Setting Type: Customer Requests...');
+                const typeOk = await assertDropdown('Type', 'Customer Requests', 3000);
+                if (!typeOk) ok = false;
+                await new Promise(r => setTimeout(r, 300));
+              } else if (!typeTr) {
+                console.log('[BF Kairos] [Req2Call] Type trigger NOT FOUND.');
+                ok = false;
+              }
+              // Customer request type (renders only after Type commits).
+              const crtTr = await waitModalTriggerShared('Customer request type', 3500);
+              if (crtTr && !isDropdownSelected(crtTr, 'Customer requested to be called')) {
+                console.log('[BF Kairos] [Req2Call] Setting Customer request type: Customer requested to be called...');
+                const crtOk = await assertDropdown('Customer request type', 'Customer requested to be called', 3000);
+                if (!crtOk) ok = false;
+              } else if (!crtTr) {
+                console.log('[BF Kairos] [Req2Call] Customer request type trigger NOT FOUND.');
+                ok = false;
+              }
+              // Status = Open
+              const stTr = await waitModalTriggerShared('Status');
+              if (stTr && !isDropdownSelected(stTr, 'Open')) {
+                console.log('[BF Kairos] [Req2Call] Setting Status: Open...');
+                await assertDropdown('Status', 'Open', 3000);
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Team fixed for this preset (not the Settings default).
+              const teamTr = await waitModalTriggerShared('Team');
+              if (teamTr && !isDropdownSelected(teamTr, 'cx retention restaurant')) {
+                console.log('[BF Kairos] [Req2Call] Setting Team: cx retention restaurant...');
+                const teamOk = await assertDropdown('Team', 'cx retention restaurant', 3000);
+                if (!teamOk) ok = false;
+                await new Promise(r => setTimeout(r, 150));
+              }
+              // Order number + subject "Request to call by CX - {order}".
+              const orderNo = await resolveModalOrderNo();
+              if (orderNo) {
+                await typeModalOrderNo(orderNo);
+                setModalSubject(`Request to call by CX - ${orderNo}`);
+              } else {
+                console.log('[BF Kairos] [Req2Call] No order number found.');
+                ok = false;
+              }
+              return ok;
             }
             // Senior description template (only fills an empty message editor).
             // Senior description template (only fills an empty message editor).
@@ -6007,6 +6080,11 @@
     createBtnEl.addEventListener('click', () => {
       if (isFoodRms) { rmsTicketHandoff(createBtnEl); return; }
       openTicketPage(createBtnEl, 'Normal Ticket');
+    });
+    // Req to call: dedicated preset — Type=Customer Requests, request type=
+    // "Customer requested to be called", Team=cx retention restaurant, subject.
+    reqCallBtn.addEventListener('click', () => {
+      openTicketPage(reqCallBtn, 'req to call', { bf_preset: 'req_to_call' });
     });
 
     function findOrderLink() {
@@ -11864,6 +11942,7 @@ Have a good day.`
     // Section 1: Ticket Actions (Calm Blue) — on RMS only Create + Tree.
     if (!isFoodRms) container.appendChild(seniorBtn);
     container.appendChild(createBtnEl);
+    if (!isFoodRms) container.appendChild(reqCallBtn);
     container.appendChild(treeWrapper);
     if (!isFoodRms) container.appendChild(autoFillWrapper);
 
