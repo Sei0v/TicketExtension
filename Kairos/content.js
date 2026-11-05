@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.3.0] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.3.1] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -1664,7 +1664,8 @@
       const c = (category || '').trim().toLowerCase();
       if (c.includes('rider')) return 'Rider Support';
       if (c.includes('restaurant')) return 'Restaurant Support';
-      return 'Internal Request';
+      // e.g. "Order Cancelled" → subject "Order Cancelled - {sub} - {order}"
+      return (category || '').trim() || 'Internal Request';
     }
     return (treeType || '').trim();
   };
@@ -2907,7 +2908,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.3.0';
+    const TOOL_VERSION = '5.3.1';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -9680,6 +9681,43 @@ Have a good day.`
               { label: 'Pricing Issue or Description or Photo' },
               { label: 'Rider Picked Up wrong Order' },
               { label: 'Other' }
+            ]
+          },
+          {
+            label: 'Order Cancelled',
+            children: [
+              { label: 'Fake order' },
+              { label: 'Food is inedible' },
+              { label: 'Vendor System Issue' },
+              { label: 'Lack of Delivery Men' },
+              { label: 'Spill/damaged Order' },
+              { label: 'Unprofessional Behavior from Rider' },
+              { label: 'Duplicate Order' },
+              { label: 'Have an Emergency' },
+              { label: 'Forgot to add a voucher' },
+              { label: 'Edit Order' },
+              { label: 'Ordered by mistake' },
+              { label: 'Missing items' },
+              { label: 'Incomplete/Wrong Address' },
+              { label: 'Change Payment Method' },
+              { label: 'Change Delivery Details' },
+              { label: 'Refuse to receive the order' },
+              { label: 'Unable to pay' },
+              { label: 'Late Delivery' },
+              { label: 'Rider mixed up orders' },
+              { label: 'Rider unreachable' },
+              { label: 'Rider Refuse to deliver' },
+              { label: 'Rider Accident' },
+              { label: "Customer Doesn't respond" },
+              { label: 'Vendor Didn\'t Accept Order' },
+              { label: 'Special request can not be applied' },
+              { label: 'Preparation Delay' },
+              { label: 'Vendor prepared wrong order' },
+              { label: 'Vendor Ignored Special Request' },
+              { label: 'Electricity Issue' },
+              { label: 'Internet Issue' },
+              { label: 'Kitchen Issue' },
+              { label: 'Refuse to prepare Order' }
             ]
           }
         ]
