@@ -1,1 +1,1 @@
-{"notes": "v5.3.1: new Internal Requests tree 'Order Cancelled' with 32 sub-categories; subject uses the category name.", "updated": "2026-11-05", "version": "5.3.1"}
+{"notes": "v5.3.3: Tree flow — when customer phone is Not Available, use the visible customer email for To search and chip detection.", "updated": "2026-11-09", "version": "5.3.3"}

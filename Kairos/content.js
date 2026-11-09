@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.3.1] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.3.3] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2908,7 +2908,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.3.1';
+    const TOOL_VERSION = '5.3.3';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -4666,6 +4666,59 @@
             return null;
           };
 
+          // Helper to find the customer email in the contact/side panel.
+          // The email is visible as text even when the phone element is not a
+          // mailto link and the phone itself reads "Not Available".
+          const findCustomerEmail = () => {
+            try {
+              const validEmail = (v) => {
+                const s = (v || '').trim().toLowerCase();
+                return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(s) ? s : '';
+              };
+              // 1) Contact side panel first: prefer mailto links and visible text
+              // inside that panel over unrelated page links.
+              const panel = document.querySelector('[data-testid*="contact"], aside, [class*="sidepanel"]');
+              if (panel) {
+                const panelMailLinks = Array.from(panel.querySelectorAll('a[href^="mailto:"]'))
+                  .filter(el => !el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn, #bf-settings-panel, [data-testid="compose-form"], #bf-email-modal') &&
+                    !isInsideAgent(el) && !isInsideConversation(el));
+                for (const a of panelMailLinks) {
+                  const fromHref = validEmail((a.getAttribute('href') || '').replace(/^mailto:/i, '').split('?')[0]);
+                  if (fromHref) return fromHref;
+                  const fromText = validEmail(a.textContent || '');
+                  if (fromText) return fromText;
+                }
+                const els = Array.from(panel.querySelectorAll('span, div, p, a, button'))
+                  .filter(el => !el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn, #bf-settings-panel, [data-testid="compose-form"], #bf-email-modal') &&
+                    !isInsideAgent(el) && !isInsideConversation(el));
+                const candidates = [];
+                for (const el of els) {
+                  const t = (el.textContent || '').trim();
+                  if (!t || t.length > 100) continue;
+                  const m = t.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+                  if (!m) continue;
+                  const email = validEmail(m[0]);
+                  if (!email) continue;
+                  if (/(breadfast|support|noreply|notifications?)/.test(email)) continue;
+                  candidates.push({ email, len: t.length, el });
+                }
+                candidates.sort((a, b) => a.len - b.len);
+                if (candidates.length) return candidates[0].email;
+              }
+              // 2) Other page-level mailto links as a last resort.
+              const mailLinks = Array.from(document.querySelectorAll('a[href^="mailto:"]'))
+                .filter(el => !el.closest('#bf-custom-ticket-buttons, #bf-continue-tree-btn, #bf-settings-panel, [data-testid="compose-form"], #bf-email-modal') &&
+                  !isInsideAgent(el) && !isInsideConversation(el));
+              for (const a of mailLinks) {
+                const fromHref = validEmail((a.getAttribute('href') || '').replace(/^mailto:/i, '').split('?')[0]);
+                if (fromHref) return fromHref;
+                const fromText = validEmail(a.textContent || '');
+                if (fromText) return fromText;
+              }
+            } catch (e) {}
+            return '';
+          };
+
           // Helper to find Customer Name in DOM
           const isGenericName = (t) => /^(tickets?|contacts?|conversations?|inbox|search|available|online|offline|notifications?|teams?|none|unassigned)$/i.test((t || '').trim()) || /^\+?\d[\d\s\-()]*$/.test((t || '').trim());
           // Helper to find Customer Name anchored to the customer phone card.
@@ -4783,6 +4836,21 @@
             showToast('Could not find CST phone number.', 'warning');
           }
 
+          // No customer phone ("Not Available") → use the visible customer
+          // email as the To-field search term instead of stalling the flow.
+          let custEmail = '';
+          if (!phone) {
+            custEmail = findCustomerEmail();
+            if (!custEmail) { try { custEmail = (extractCustomerInfo() || {}).email || ''; } catch (e) {} }
+            if (!custEmail) { try { custEmail = ticketDataCache.customerEmail || ''; } catch (e) {} }
+            custEmail = (custEmail || '').trim().toLowerCase();
+            if (custEmail) {
+              console.log('[BF Kairos] No CST phone — using customer email as search term:', custEmail);
+            } else {
+              console.log('[BF Kairos] No CST phone and no customer email found — customer selection will be manual.');
+            }
+          }
+
           if (custName) {
             console.log('[BF Kairos] Extracted CST name:', custName);
           }
@@ -4874,9 +4942,11 @@
             }
           }
 
-          // Step 6: If phone extracted and To input found, type phone into To input
-          if (phone && toInput) {
-            console.log('[BF Kairos] Typing CST phone into To input:', phone);
+          // Step 6: Search by CST phone, or by the customer email when no
+          // phone is available. Enter the tree flow in either case.
+          const searchTerm = phone || custEmail;
+          if (searchTerm && toInput) {
+            console.log('[BF Kairos] Typing customer search term into To input:', searchTerm);
             toInput.focus();
             await new Promise(r => setTimeout(r, 60));
 
@@ -4893,20 +4963,20 @@
             } catch (e) {}
 
             const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
-            if (nativeSetter) nativeSetter.call(toInput, phone);
-            else toInput.value = phone;
+            if (nativeSetter) nativeSetter.call(toInput, searchTerm);
+            else toInput.value = searchTerm;
 
             toInput.dispatchEvent(new Event('input', { bubbles: true }));
             toInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            for (let i = 0; i < phone.length; i++) {
-              const ch = phone[i];
+            for (let i = 0; i < searchTerm.length; i++) {
+              const ch = searchTerm[i];
               toInput.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true }));
               toInput.dispatchEvent(new KeyboardEvent('keypress', { key: ch, bubbles: true }));
               toInput.dispatchEvent(new KeyboardEvent('keyup', { key: ch, bubbles: true }));
             }
 
-            showToast(`CST Phone entered: ${phone}`, 'info');
+            showToast(`Customer search entered: ${searchTerm}`, 'info', true);
             try { toFieldAnchor = (toInput && toInput.parentElement) || null; } catch (e) { toFieldAnchor = null; }
 
             // Helper to check if Customer is committed as a chip in To field.
@@ -4915,7 +4985,10 @@
             // typed (no input with a value) and no results list is open.
             const isCustomerSelected = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
-              if (cleanP.length < 8) return false;
+              const cleanE = (custEmail || '').trim().toLowerCase();
+              // In phone mode digits identify the chip. In email mode either the
+              // exact email or any committed email chip identifies it.
+              if (cleanP.length < 8 && !cleanE) return false;
               // Text minus typed-but-uncommitted input values.
               const committedText = (el) => {
                 try {
@@ -4924,8 +4997,12 @@
                   return (clone.textContent || '');
                 } catch (e) { return (el.textContent || ''); }
               };
-              const hasDigits = (t) => t.replace(/[^0-9]/g, '').includes(cleanP);
-              const hasEmail = (t) => t.includes('@') && t.includes('.');
+              const hasDigits = (t) => cleanP.length >= 8 && t.replace(/[^0-9]/g, '').includes(cleanP);
+              const hasEmail = (t) => {
+                const low = (t || '').toLowerCase();
+                if (cleanE && low.includes(cleanE)) return true;
+                return t.includes('@') && t.includes('.');
+              };
               const hasX = (el) => !!(el.querySelector('svg.lucide-x, [class*="i-lucide-x"], [class*="chip"], button[aria-label*="remove" i], button[aria-label*="clear" i]'));
               const hasOptions = (el) => !!(el.querySelector('[role="option"], [role="listbox"]'));
               const isGeneric = (t) => {
@@ -4992,11 +5069,14 @@
             // Results render as [role="option"] items in a listbox/popover under the compose form
             const findRecipientCard = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
+              const cleanE = (custEmail || '').trim().toLowerCase();
               const searchName = (custName || '').trim().toLowerCase();
               const matchesCustomer = (t) => {
                 if (!t) return false;
                 if (t.includes('Enter at least') || t.includes('search by')) return false;
+                const low = t.toLowerCase();
                 const hasPhone = cleanP.length > 7 && t.replace(/[^0-9]/g, '').includes(cleanP);
+                const hasExactEmail = !!cleanE && low.includes(cleanE);
                 // Never match the agent's own card (name-only rows): it has no
                 // customer phone in it. Requires the saved agent name to be set
                 // (Email modal saves it).
@@ -5007,7 +5087,7 @@
                     if (tl === agNm || tl.startsWith(agNm + ' ') || tl.includes(' ' + agNm) || tl.includes(agNm + ' ')) return false;
                   }
                 } catch (e) {}
-                if (t.includes('@') && t.includes('.')) return true;
+                if (hasExactEmail || (t.includes('@') && t.includes('.'))) return true;
                 if (hasPhone) return true;
                 if (searchName.length > 2 && t.toLowerCase().includes(searchName)) return true;
                 return false;
@@ -5019,6 +5099,7 @@
               // match the agent's own card while the phone identifies the customer).
               const pickBest = (rows) => {
                 const phoneTier = [];
+                const emailTier = [];
                 const otherTier = [];
                 for (const row of rows) {
                   if (row.closest('#bf-custom-ticket-buttons')) continue;
@@ -5026,9 +5107,10 @@
                   if (t.length < 2 || t.length > 400) continue;
                   if (/enter at least|search by/i.test(t)) continue;
                   if (cleanP.length > 7 && t.replace(/[^0-9]/g, '').includes(cleanP)) phoneTier.push(row);
+                  else if (cleanE && t.toLowerCase().includes(cleanE)) emailTier.push(row);
                   else if (matchesCustomer(t)) otherTier.push(row);
                 }
-                for (const tier of [phoneTier, otherTier]) {
+                for (const tier of [phoneTier, emailTier, otherTier]) {
                   if (!tier.length) continue;
                   tier.sort((a, b) => ((a.textContent || '').length - (b.textContent || '').length));
                   return tier[0];
@@ -5267,7 +5349,7 @@
                   }
                 }
               }
-              if (!phoneMatched) {
+              if (cleanM.length > 7 && !phoneMatched) {
                 console.warn('[BF Kairos] No phone-matching recipient found.');
                 showToast("CST name doesn't match this number — verify the customer manually, continuing anyway.", 'error');
               }
@@ -5400,15 +5482,20 @@
             // YOU pick Via manually — the extension waits until Via is set, then fills the tree.
             // (In test-auto mode the attempt below runs first; this toast shows only if it fails.)
             if (!autoViaRequested) showToast('Now choose Via yourself — the tree will complete automatically.', 'info');
-            // Smallest element holding the "(+phone" chip text (works without testids)
+            // Smallest element holding the committed customer chip: phone
+            // "(+phone" text, or the selected email chip when no phone exists.
             const findToChip = () => {
               const cleanP = (phone || '').replace(/[^0-9]/g, '');
-              if (cleanP.length < 8) return null;
+              const cleanE = (custEmail || '').trim().toLowerCase();
+              if (cleanP.length < 8 && !cleanE) return null;
               const cands = Array.from(document.querySelectorAll('span, div, p')).filter(el => {
                 if (el.closest('#bf-custom-ticket-buttons')) return false;
+                if (el.closest('[role="option"], [role="listbox"]')) return false;
                 const t = (el.textContent || '');
-                if (!t.replace(/[^0-9]/g, '').includes(cleanP)) return false;
-                if (!/\(\+?\d/.test(t)) return false;
+                const hasPhone = cleanP.length >= 8 && t.replace(/[^0-9]/g, '').includes(cleanP);
+                const hasEmail = !!cleanE && (t.toLowerCase().includes(cleanE) || (t.includes('@') && t.includes('.')));
+                if (!hasPhone && !hasEmail) return false;
+                if (hasPhone && !/\(\+?\d/.test(t)) return false;
                 return true;
               });
               if (!cands.length) return null;
