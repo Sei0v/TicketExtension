@@ -1,1 +1,1 @@
-{"notes": "v5.3.3: Tree flow — when customer phone is Not Available, use the visible customer email for To search and chip detection.", "updated": "2026-11-09", "version": "5.3.3"}
+{"notes": "v5.3.4: added always-visible position-reset button under the dock arrow; returns toolbar to current viewport default without zooming out.", "updated": "2026-11-09", "version": "5.3.4"}

@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.3.3] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.3.4] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2174,6 +2174,10 @@
     if (existingTab) {
       try { existingTab.remove(); } catch (e) { }
     }
+    const existingResetTab = document.getElementById('bf-position-reset-btn');
+    if (existingResetTab) {
+      try { existingResetTab.remove(); } catch (e) { }
+    }
 
     const container = document.createElement('div');
     container.id = 'bf-custom-ticket-buttons';
@@ -2908,7 +2912,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.3.3';
+    const TOOL_VERSION = '5.3.4';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3087,6 +3091,69 @@
       applyCollapsed(!isCollapsed);
     });
 
+    // Recovery button directly below the arrow tab: returns the toolbar to
+    // its default floating position for the current viewport/browser zoom.
+    // It stays outside the collapsible container, so it can be used when the
+    // toolbar itself has scrolled/zoomed out of view.
+    const resetPosBtn = document.createElement('button');
+    resetPosBtn.id = 'bf-position-reset-btn';
+    resetPosBtn.setAttribute('type', 'button');
+    resetPosBtn.setAttribute('aria-label', 'Reset toolbar position');
+    resetPosBtn.innerHTML = '&#8962;'; // ⌖ position indicator
+    resetPosBtn.title = 'Reset toolbar position — current viewport default (إعادة موضع الأدوات)';
+    resetPosBtn.style.position = 'fixed';
+    resetPosBtn.style.bottom = '164px';
+    resetPosBtn.style.right = '0';
+    resetPosBtn.style.left = 'auto';
+    resetPosBtn.style.zIndex = '2147483646';
+    resetPosBtn.style.width = '28px';
+    resetPosBtn.style.height = '40px';
+    resetPosBtn.style.padding = '0';
+    resetPosBtn.style.margin = '0';
+    resetPosBtn.style.border = '1px solid rgba(255, 255, 255, 0.25)';
+    resetPosBtn.style.borderRight = 'none';
+    resetPosBtn.style.borderLeft = '1px solid rgba(255, 255, 255, 0.25)';
+    resetPosBtn.style.borderRadius = '8px 0 0 8px';
+    resetPosBtn.style.backgroundColor = '#1d4ed8';
+    resetPosBtn.style.color = '#ffffff';
+    resetPosBtn.style.cursor = 'pointer';
+    resetPosBtn.style.display = 'flex';
+    resetPosBtn.style.alignItems = 'center';
+    resetPosBtn.style.justifyContent = 'center';
+    resetPosBtn.style.fontSize = '15px';
+    resetPosBtn.style.lineHeight = '1';
+    resetPosBtn.style.userSelect = 'none';
+    resetPosBtn.style.outline = 'none';
+    resetPosBtn.style.boxShadow = '-3px 2px 10px rgba(0, 0, 0, 0.35)';
+    resetPosBtn.style.transition = 'background-color 0.2s ease, box-shadow 0.2s ease';
+    resetPosBtn.addEventListener('mouseenter', () => {
+      resetPosBtn.style.backgroundColor = '#2563eb';
+      resetPosBtn.style.boxShadow = currentSide === 'right'
+        ? '-4px 2px 14px rgba(37, 99, 235, 0.5)'
+        : '4px 2px 14px rgba(37, 99, 235, 0.5)';
+    });
+    resetPosBtn.addEventListener('mouseleave', () => {
+      resetPosBtn.style.backgroundColor = '#1d4ed8';
+      resetPosBtn.style.boxShadow = currentSide === 'right'
+        ? '-3px 2px 10px rgba(0, 0, 0, 0.35)'
+        : '3px 2px 10px rgba(0, 0, 0, 0.35)';
+    });
+    resetPosBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Remove any dragged/saved placement and return to the default floating
+      // corner for the current viewport. Then unhide the toolbar.
+      try { localStorage.removeItem('bf_toolbar_pos'); } catch (err) {}
+      try { localStorage.removeItem('bf_toolbar_dock'); } catch (err) {}
+      try { currentDock = 'floating'; } catch (err) {}
+      try { container.style.transform = ''; } catch (err) {}
+      try { applyDockMode('floating'); } catch (err) {}
+      try { applyPosition(currentSide); } catch (err) {}
+      try { applyCollapsed(false); } catch (err) {}
+      try { positionDockTabs(); } catch (err) {}
+      try { showToast('Toolbar position reset for current viewport.', 'success', true); } catch (err) {}
+    });
+
     const getLeftOffset = () => {
       const sidebar = document.querySelector('nav, .app-nav-bar, .page-actions, aside, [role="navigation"]');
       if (sidebar) {
@@ -3114,6 +3181,33 @@
     try {
       isCollapsed = localStorage.getItem('bf_buttons_collapsed') === 'true';
     } catch (e) { }
+
+    // Keep the arrow + reset tab attached to the selected edge and within
+    // the current viewport. Browser zoom changes CSS viewport size, so the
+    // coordinates are recalculated from the current inner dimensions.
+    const positionDockTabs = () => {
+      try {
+        const height = Math.max(0, window.innerHeight || 0);
+        const safeDockBottom = Math.max(64, Math.min(220, Math.max(64, height - 72)));
+        dockTab.style.bottom = `${safeDockBottom}px`;
+        resetPosBtn.style.bottom = `${Math.max(12, safeDockBottom - 56)}px`;
+        if (currentSide === 'left') {
+          resetPosBtn.style.left = '0';
+          resetPosBtn.style.right = 'auto';
+          resetPosBtn.style.borderLeft = 'none';
+          resetPosBtn.style.borderRight = '1px solid rgba(255, 255, 255, 0.25)';
+          resetPosBtn.style.borderRadius = '0 8px 8px 0';
+          resetPosBtn.style.boxShadow = '3px 2px 10px rgba(0, 0, 0, 0.35)';
+        } else {
+          resetPosBtn.style.right = '0';
+          resetPosBtn.style.left = 'auto';
+          resetPosBtn.style.borderRight = 'none';
+          resetPosBtn.style.borderLeft = '1px solid rgba(255, 255, 255, 0.25)';
+          resetPosBtn.style.borderRadius = '8px 0 0 8px';
+          resetPosBtn.style.boxShadow = '-3px 2px 10px rgba(0, 0, 0, 0.35)';
+        }
+      } catch (e) {}
+    };
 
     const applyCollapsed = (collapsed) => {
       isCollapsed = !!collapsed;
@@ -3196,6 +3290,7 @@
       }
       headerRow.style.justifyContent = 'space-between';
 
+      try { positionDockTabs(); } catch (e) {}
       applyCollapsed(isCollapsed);
 
       if (typeof updateTreeMenuPosition === 'function') {
@@ -12179,10 +12274,14 @@ Have a good day.`
 
     document.body.appendChild(container);
     document.body.appendChild(dockTab);
+    document.body.appendChild(resetPosBtn);
 
     // Apply saved toolbar dock, layout, colors, size %, lock state, and custom position (if dragged before).
     try { applyToolbarLayout(getToolbarLayout()); } catch (e) {}
     try { applyDockMode(getDockMode()); } catch (e) {}
+    try { positionDockTabs(); } catch (e) {}
+    try { window.addEventListener('resize', positionDockTabs); } catch (e) {}
+    try { window.addEventListener('orientationchange', positionDockTabs); } catch (e) {}
     try { applyColorTheme(getColorTheme()); } catch (e) {}
     try { applyAllBtnScenes(); } catch (e) {}
     try { applyToolbarScale(getToolbarScale()); } catch (e) {}
