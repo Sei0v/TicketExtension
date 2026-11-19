@@ -15,7 +15,7 @@
   if (!isBreadfastAdmin && !isFoodRms && !isKairos && !isSwitcherPage) {
     return;
   }
-  console.log('[Kairos Tool v5.3.4] Script active on host:', window.location.host);
+  console.log('[Kairos Tool v5.3.5] Script active on host:', window.location.host);
 
   // Switcher page: auto-open the Select2 dropdown and type the customer
   // phone passed as ?bf_phone= (set by the RMS toolbar Switcher button).
@@ -2912,7 +2912,7 @@
 
     // Version pill: shows current version, checks GitHub for updates.
     // Blue "Update" pill + toast when a newer version.json is published.
-    const TOOL_VERSION = '5.3.4';
+    const TOOL_VERSION = '5.3.5';
     const REPO_VERSION_URL = 'https://raw.githubusercontent.com/Sei0v/TicketExtension/main/Kairos/version.json';
     const DOWNLOAD_ZIP_URL = 'https://github.com/Sei0v/TicketExtension/archive/refs/heads/main.zip';
     let latestKnownVersion = '';
@@ -3246,9 +3246,13 @@
         if (currentDock === 'floating') {
           if (loadToolbarPos()) applyCustomPos();
           else if (currentSide === 'right') {
+            container.style.top = 'auto';
+            container.style.bottom = '20px';
             container.style.right = '28px';
             container.style.left = 'auto';
           } else {
+            container.style.top = 'auto';
+            container.style.bottom = '20px';
             container.style.left = getLeftOffset();
             container.style.right = 'auto';
           }
@@ -3266,6 +3270,15 @@
       try {
         localStorage.setItem('bf_buttons_position', side);
       } catch (e) { }
+
+      // Anchor the floating toolbar to the viewport bottom when no custom drag
+      // position is saved. applyDockMode('floating') clears top/bottom, and a
+      // position:fixed box with auto insets falls back to its static position —
+      // deep inside long pages (e.g. the RMS orders list), far below the fold.
+      if (currentDock === 'floating' && !loadToolbarPos()) {
+        container.style.top = 'auto';
+        container.style.bottom = '20px';
+      }
 
       if (side === 'left') {
         container.style.left = isCollapsed ? '-260px' : getLeftOffset();
